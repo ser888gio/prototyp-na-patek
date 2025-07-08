@@ -39,7 +39,6 @@ if os.getenv("GEMINI_API_KEY") is None:
 # Used for Google Search API
 genai_client = Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-
 # Nodes
 def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerationState:
     """LangGraph node that generates search queries based on the User's question.
@@ -76,10 +75,26 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
         research_topic=get_research_topic(state["messages"]),
         number_queries=state["initial_search_query_count"],
     )
-    # Generate the search queries
-    result = structured_llm.invoke(formatted_prompt)
-    return {"search_query": result.query}
-
+    
+    # Generate the search queries with error handling
+    try:
+        result = structured_llm.invoke(formatted_prompt)
+        if result is None:
+            # Fallback: create a basic search query from the research topic
+            research_topic = get_research_topic(state["messages"])
+            return {"search_query": [research_topic]}
+        
+        # Ensure result.query is not None and is a list
+        if not hasattr(result, 'query') or result.query is None:
+            research_topic = get_research_topic(state["messages"])
+            return {"search_query": [research_topic]}
+            
+        return {"search_query": result.query}
+    except Exception as e:
+        # Fallback: create a basic search query from the research topic
+        research_topic = get_research_topic(state["messages"])
+        print(f"Error in generate_query: {e}. Using fallback query.")
+        return {"search_query": [research_topic]}
 
 def continue_to_web_research(state: QueryGenerationState):
     """LangGraph node that sends the search queries to the web research node.
@@ -90,7 +105,6 @@ def continue_to_web_research(state: QueryGenerationState):
         Send("web_research", {"search_query": search_query, "id": int(idx)})
         for idx, search_query in enumerate(state["search_query"])
     ]
-
 
 def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
     """LangGraph node that performs web research using the native Google Search API tool.
@@ -111,30 +125,74 @@ def web_research(state: WebSearchState, config: RunnableConfig) -> OverallState:
         research_topic=state["search_query"],
     )
 
-    # Uses the google genai client as the langchain client doesn't return grounding metadata
-    response = genai_client.models.generate_content(
-        model=configurable.query_generator_model,
-        contents=formatted_prompt,
-        config={
-            "tools": [{"google_search": {}}],
-            "temperature": 0,
-        },
-    )
-    # resolve the urls to short urls for saving tokens and time
-    resolved_urls = resolve_urls(
-        response.candidates[0].grounding_metadata.grounding_chunks, state["id"]
-    )
-    # Gets the citations and adds them to the generated text
-    citations = get_citations(response, resolved_urls)
-    modified_text = insert_citation_markers(response.text, citations)
-    sources_gathered = [item for citation in citations for item in citation["segments"]]
+    try:
+        # Uses the google genai client as the langchain client doesn't return grounding metadata
+        response = genai_client.models.generate_content(
+            model=configurable.query_generator_model,
+            contents=formatted_prompt,
+            config={
+                "tools": [{"google_search": {}}],
+                "temperature": 0,
+            },
+        )
+        
+        # Check if response and required attributes exist
+        if (response is None or 
+            not hasattr(response, 'candidates') or 
+            not response.candidates or 
+            not hasattr(response.candidates[0], 'grounding_metadata') or
+            response.candidates[0].grounding_metadata is None):
+            
+            # Fallback: return minimal valid state
+            return {
+                "sources_gathered": [],
+                "search_query": [state["search_query"]],
+                "web_research_result": [f"No search results found for: {state['search_query']}"],
+            }
+        
+        # Check if grounding_chunks exists
+        grounding_metadata = response.candidates[0].grounding_metadata
+        grounding_chunks = getattr(grounding_metadata, 'grounding_chunks', None)
+        
+        if grounding_chunks is None:
+            # Fallback: return minimal valid state with response text
+            response_text = getattr(response, 'text', f"Search completed for: {state['search_query']}")
+            return {
+                "sources_gathered": [],
+                "search_query": [state["search_query"]],
+                "web_research_result": [response_text],
+            }
+        
+        # resolve the urls to short urls for saving tokens and time
+        resolved_urls = resolve_urls(grounding_chunks, state["id"])
+        
+        # Gets the citations and adds them to the generated text
+        citations = get_citations(response, resolved_urls)
+        modified_text = insert_citation_markers(response.text, citations)
+        
+        # Ensure citations is iterable and has the expected structure
+        sources_gathered = []
+        if citations and isinstance(citations, list):
+            for citation in citations:
+                if citation and isinstance(citation, dict) and "segments" in citation:
+                    segments = citation["segments"]
+                    if segments and isinstance(segments, list):
+                        sources_gathered.extend(segments)
 
-    return {
-        "sources_gathered": sources_gathered,
-        "search_query": [state["search_query"]],
-        "web_research_result": [modified_text],
-    }
-
+        return {
+            "sources_gathered": sources_gathered,
+            "search_query": [state["search_query"]],
+            "web_research_result": [modified_text],
+        }
+        
+    except Exception as e:
+        # Fallback: return minimal valid state
+        print(f"Error in web_research: {e}. Using fallback response.")
+        return {
+            "sources_gathered": [],
+            "search_query": [state["search_query"]],
+            "web_research_result": [f"Search error for: {state['search_query']}. {str(e)}"],
+        }
 
 def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
     """LangGraph node that identifies knowledge gaps and generates potential follow-up queries.
@@ -169,16 +227,49 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
         max_retries=2,
         api_key=os.getenv("GEMINI_API_KEY"),
     )
-    result = llm.with_structured_output(Reflection).invoke(formatted_prompt)
+    
+    # Generate reflection with error handling
+    try:
+        result = llm.with_structured_output(Reflection).invoke(formatted_prompt)
+        
+        if result is None:
+            # Fallback: assume research is sufficient and stop
+            return {
+                "is_sufficient": True,
+                "knowledge_gap": "",
+                "follow_up_queries": [],
+                "research_loop_count": state["research_loop_count"],
+                "number_of_ran_queries": len(state["search_query"]),
+            }
+        
+        # Ensure all required attributes exist
+        is_sufficient = getattr(result, 'is_sufficient', True)
+        knowledge_gap = getattr(result, 'knowledge_gap', "")
+        follow_up_queries = getattr(result, 'follow_up_queries', [])
+        
+        # Ensure follow_up_queries is a list
+        if follow_up_queries is None:
+            follow_up_queries = []
+        elif not isinstance(follow_up_queries, list):
+            follow_up_queries = []
 
-    return {
-        "is_sufficient": result.is_sufficient,
-        "knowledge_gap": result.knowledge_gap,
-        "follow_up_queries": result.follow_up_queries,
-        "research_loop_count": state["research_loop_count"],
-        "number_of_ran_queries": len(state["search_query"]),
-    }
-
+        return {
+            "is_sufficient": is_sufficient,
+            "knowledge_gap": knowledge_gap,
+            "follow_up_queries": follow_up_queries,
+            "research_loop_count": state["research_loop_count"],
+            "number_of_ran_queries": len(state["search_query"]),
+        }
+    except Exception as e:
+        # Fallback: assume research is sufficient and stop
+        print(f"Error in reflection: {e}. Assuming research is sufficient.")
+        return {
+            "is_sufficient": True,
+            "knowledge_gap": "",
+            "follow_up_queries": [],
+            "research_loop_count": state["research_loop_count"],
+            "number_of_ran_queries": len(state["search_query"]),
+        }
 
 def evaluate_research(
     state: ReflectionState,
@@ -215,7 +306,6 @@ def evaluate_research(
             )
             for idx, follow_up_query in enumerate(state["follow_up_queries"])
         ]
-
 
 def finalize_answer(state: OverallState, config: RunnableConfig):
     """LangGraph node that finalizes the research summary.
@@ -264,7 +354,6 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
         "sources_gathered": unique_sources,
     }
 
-
 # Create our Agent Graph
 builder = StateGraph(OverallState, config_schema=Configuration)
 
@@ -291,3 +380,5 @@ builder.add_conditional_edges(
 builder.add_edge("finalize_answer", END)
 
 graph = builder.compile(name="pro-search-agent")
+
+

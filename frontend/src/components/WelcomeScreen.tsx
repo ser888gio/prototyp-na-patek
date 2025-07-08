@@ -32,8 +32,5 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         hasHistory={false}
       />
     </div>
-    <p className="text-xs text-neutral-500">
-      Powered by Google Gemini and LangChain LangGraph.
-    </p>
   </div>
 );
