@@ -100,7 +100,7 @@ export default function App() {
   }, [thread.messages, thread.isLoading, processedEventsTimeline]);
 
   const handleSubmit = useCallback(
-    (submittedInputValue: string, effort: string, model: string) => {
+    (submittedInputValue: string, effort: string) => {
       if (!submittedInputValue.trim()) return;
       setProcessedEventsTimeline([]);
       hasFinalizeEventOccurredRef.current = false;
@@ -138,7 +138,6 @@ export default function App() {
         messages: newMessages,
         initial_search_query_count: initial_search_query_count,
         max_research_loops: max_research_loops,
-        reasoning_model: model,
       });
     },
     [thread]
@@ -170,8 +169,8 @@ export default function App() {
         ) : error ? (
           <div className="flex flex-col items-center justify-center h-full">
             <div className="flex flex-col items-center justify-center gap-4">
-              <h1 className="text-2xl text-destructive font-bold">Error</h1>
-              <p className="text-destructive">{JSON.stringify(error)}</p>
+              <h1 className="text-2xl text-red-400 font-bold">Error</h1>
+              <p className="text-red-400">{JSON.stringify(error)}</p>
 
               <Button
                 variant="destructive"
