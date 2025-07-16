@@ -331,7 +331,7 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
         summaries="\n---\n\n".join(state["web_research_result"]),
     )
 
-    # init Reasoning Model, default to Gemini 2.5 Flash
+    # init Reasoning Model, default to Gemini 2.0
     llm = ChatGoogleGenerativeAI(
         model=reasoning_model,
         temperature=0,
