@@ -4,10 +4,19 @@ import { MdDriveFolderUpload } from "react-icons/md";
 
 type UploadStatus = "idle" | "uploading" | "success" | "error";
 
+interface UploadResponse {
+  message: string;
+  filename: string;
+  original_filename: string;
+  file_url: string;
+  file_size: number;
+}
+
 export default function FileUploader() {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     if (e.target.files) {
@@ -25,10 +34,9 @@ export default function FileUploader() {
     formData.append("file", file);
 
     try {
-      await axios.post("url kam to náhrat", formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
+      //Dává se post na backend, kde běž aplikace s endpointem upload
+      //It sends the request to the backend
+      const response = await axios.post("http://127.0.0.1:2024", formData, {
         onUploadProgress: (progressEvent) => {
           const progress = progressEvent.total
             ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
@@ -36,6 +44,9 @@ export default function FileUploader() {
           setUploadProgress(progress);
         },
       });
+
+      const result: UploadResponse = response.data;
+      setUploadResult(result);
 
       setStatus("success");
       setUploadProgress(100);

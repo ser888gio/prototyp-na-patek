@@ -1,10 +1,44 @@
 # mypy: disable - error - code = "no-untyped-def,misc"
 import pathlib
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, File, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+import boto3
+from botocore.client import Config
+from fastapi.middleware.cors import CORSMiddleware
+import uuid #library for creating ids
+import os
+from dotenv import load_dotenv
+from dataplane import s3_upload
 
 # Define the FastAPI app
 app = FastAPI()
+
+load_dotenv()
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Add your frontend URLs
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+R2_ENDPOINT_URL = os.getenv("R2_ENDPOINT_URL")
+R2_ACCESS_KEY_ID = os.getenv("R2_ACCESS_KEY_ID")
+R2_SECRET_ACCESS_KEY = os.getenv("R2_SECRET_ACCESS_KEY")
+R2_BUCKET_NAME = os.getenv("R2_BUCKET_NAME")
+R2_ACCOUNT_ID=os.getenv("R2_ACCOUNT_ID")
+
+s3_client = boto3.client(
+    "s3",
+    endpoint_url=R2_ENDPOINT_URL,
+    aws_access_key_id=R2_ACCESS_KEY_ID,
+    aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+    region_name="eeur"
+)
+
 
 
 def create_frontend_router(build_dir="../frontend/dist"):
@@ -43,3 +77,32 @@ app.mount(
     create_frontend_router(),
     name="frontend",
 )
+
+@app.get("/")
+def read_root():
+    return {"message": "Hello World"}
+
+#Gets from the onClick func on FE a request to upload file and sends it to the bucket storage.
+@app.put("/upload")
+async def submit_docs(file: UploadFile = File(...)):
+    try:
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No name for the document")
+        
+        file_content = await file.read()
+
+        unique_filename = f"{uuid.uuid1()}" #create an id for every file
+
+        rs = s3_upload(S3CLIENT = s3_client, UploadObject=file_content, UploadMethod="Object")
+        
+        return{
+            "message": "File uploaded successfully",
+            "filename": unique_filename,
+            "original_filename": file.filename,
+            "file_size": len(file_content)
+        }
+    
+        print(rs)
+
+    except Exception as e:
+        raise e
