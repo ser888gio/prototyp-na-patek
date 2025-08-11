@@ -13,7 +13,7 @@ interface UploadResponse {
 }
 
 export default function FileUploader() {
-  const [file, setFile] = useState<File | null>(null);
+  const [file_upload, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
@@ -25,19 +25,31 @@ export default function FileUploader() {
   }
 
   async function handleFileUpload() {
-    if (!file) return;
+    console.log("=== UPLOAD START ===");
+    if (!file_upload) {
+      console.log("No file selected, returning");
+      return;
+    }
 
+    console.log("Selected file:", file_upload);
     setStatus("uploading");
     setUploadProgress(0);
 
     const formData = new FormData();
-    formData.append("upload_file", file);
+    formData.append("file_upload", file_upload);
+    console.log("FormData created and file appended");
+    console.log(formData.get("file_upload"));
 
     try {
+      console.log("About to make axios request...");
+
+      // First, let's try a simple test to see if the endpoint exists
+      console.log("Testing endpoint availability...");
+
       //Dává se post na backend, kde běž aplikace s endpointem upload
       //It sends the request to the backend
       const response = await axios.post(
-        "http://127.0.0.1:2024/uploadfile/",
+        "http://127.0.0.1:2024/uploadfilepleasefortheloveofgod/",
         formData,
         {
           onUploadProgress: (progressEvent) => {
@@ -45,19 +57,48 @@ export default function FileUploader() {
               ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
               : 0;
             setUploadProgress(progress);
+            console.log("Upload progress:", progress + "%");
           },
         }
       );
+
+      console.log("=== AXIOS REQUEST COMPLETED ===");
+      console.log("Response:", response);
+      console.log("FormData file_upload:", formData.get("file_upload"));
+      console.log("Selected file object:", file_upload);
 
       const result: UploadResponse = response.data;
       setUploadResult(result);
 
       setStatus("success");
       setUploadProgress(100);
-    } catch {
+    } catch (error) {
+      console.log("=== ERROR CAUGHT ===");
+      console.error("Upload error:", error);
+
+      if (axios.isAxiosError(error)) {
+        console.error("Axios error details:");
+        console.error("- Status:", error.response?.status);
+        console.error("- Status text:", error.response?.statusText);
+        console.error("- Response data:", error.response?.data);
+        console.error("- Request URL:", error.config?.url);
+        console.error("- Request method:", error.config?.method);
+        console.error("- Request headers:", error.config?.headers);
+
+        // Log the specific error message
+        if (error.response?.status === 400) {
+          console.error("400 Bad Request - Backend rejected the request");
+          console.error("Backend response:", error.response?.data);
+        }
+      } else {
+        console.error("Non-axios error:", error);
+      }
+
       setStatus("error");
       setUploadProgress(0);
     }
+
+    console.log("=== UPLOAD FUNCTION END ===");
   }
 
   return (
@@ -79,11 +120,11 @@ export default function FileUploader() {
         <span className="font-medium">Upload</span>
       </label>
 
-      {file && (
+      {file_upload && (
         <div className="mb-4 text-sm">
-          <p>File name: {file.name}</p>
-          <p>Size: {(file.size / 1024).toFixed(2)} KB</p>
-          <p>Type: {file.type}</p>
+          <p>File name: {file_upload.name}</p>
+          <p>Size: {(file_upload.size / 1024).toFixed(2)} KB</p>
+          <p>Type: {file_upload.type}</p>
         </div>
       )}
 
@@ -99,7 +140,7 @@ export default function FileUploader() {
         </div>
       )}
 
-      {file && status !== "uploading" && (
+      {file_upload && status !== "uploading" && (
         <button
           onClick={handleFileUpload}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

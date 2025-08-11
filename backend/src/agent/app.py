@@ -183,58 +183,118 @@ async def initialize_vector_store():
     return vector_store
 
 
-@app.post("/uploadfile/")
+@app.post("/uploadfilepleasefortheloveofgod/")
 async def upload_file(file_upload: UploadFile = File(...)):
+    global vector_store
 
-    try:
-        contents = await file_upload.read()
-        async with aiofiles.open( file_upload.filename, 'wb') as f:
-            await f.write(contents)
-    except Exception:
-        raise HTTPException(status_code=500, detail='Something went wrong')
-    finally:
-        await  file_upload.close()
-
-    return {"message": f"Successfuly uploaded { file_upload.filename}"}
-    """ global vector_store
-
+    print(f"========== UPLOAD DEBUG START ==========")
     print(f"Received file upload request")
     print(f"File name: {file_upload.filename}")
     print(f"Content type: {file_upload.content_type}")
     print(f"File size: {file_upload.size if hasattr(file_upload, 'size') else 'Unknown'}")
-
+    
     try: 
         if not file_upload or not file_upload.filename:
+            print("ERROR: No file received")
             return{
                 "status": "error",
                 "message": "No file received"
             }
     
-        if vector_store is None:
-            await initialize_vector_store()
+        print(f"Step 1: Reading file content...")
+        # Read the file content
+        file_content = await file_upload.read()
+        print(f"File content length: {len(file_content)} bytes")
+        print(f"First 100 bytes: {file_content[:100]}")
         
-        # Load and process the PDF
-        pages = await load_pdf(file_upload)
-        pages = [str(page) for page in pages if isinstance(page, str)]
-        full_text = "\n\n".join(pages)
+        # Save to temporary file for inspection
+        import tempfile
+        import os
+        temp_file_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                temp_file.write(file_content)
+                temp_file_path = temp_file.name
+            print(f"Temporary file saved at: {temp_file_path}")
+            
+            # Reset file pointer for further processing
+            await file_upload.seek(0)
+            
+            print(f"Step 2: Initializing vector store...")
+            if vector_store is None:
+                await initialize_vector_store()
+                print("Vector store initialized successfully")
+            
+            print(f"Step 3: Calling load_pdf with temp file...")
+            # Load and process the PDF using the temporary file path
+            pages = await load_pdf(temp_file_path)
+            print(f"load_pdf returned {len(pages) if pages else 0} pages")
+            
+            if pages:
+                print(f"First page preview (first 200 chars): {str(pages[0])[:200] if pages[0] else 'Empty'}")
+            
+            pages = [str(page) for page in pages if isinstance(page, str)]
+            full_text = "\n\n".join(pages)
+            print(f"Full text length: {len(full_text)} characters")
 
-        chunks = split_text_into_chunks(full_text)
+            print(f"Step 4: Splitting text into chunks...")
+            chunks = split_text_into_chunks(full_text)
+            print(f"Created {len(chunks)} chunks")
 
-        if vector_store and chunks:
-            vector_store.add_texts(chunks)
-            print(f"Added {len(chunks)} chunks to vector store")
+            if vector_store and chunks:
+                print(f"Step 5: Adding chunks to vector store...")
+                vector_store.add_texts(chunks)
+                print(f"Added {len(chunks)} chunks to vector store")
 
-        return {
-            "filename": file_upload.filename,
-            "status": "success",
-            "pages_processed": len(pages),
-            "chunks_created": len(chunks),
-            "message": f"PDF processed and {len(chunks)} chunks added to vector store"
-        }
+            print("========== UPLOAD SUCCESS ==========")
+            return {
+                "filename": file_upload.filename,
+                "status": "success",
+                "pages_processed": len(pages),
+                "chunks_created": len(chunks),
+                "message": f"PDF processed and {len(chunks)} chunks added to vector store"
+            }
+            
+        finally:
+            # Clean up temporary file
+            if temp_file_path and os.path.exists(temp_file_path):
+                os.unlink(temp_file_path)
+                print(f"Cleaned up temporary file: {temp_file_path}")
+                
     except Exception as e:
-        print(f"Error processing file: {e}")
+        print(f"========== UPLOAD ERROR ==========")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {str(e)}")
+        import traceback
+        print(f"Full traceback:")
+        traceback.print_exc()
+        print(f"========== ERROR END ==========")
+        
         return {
-            "filename": file_upload.filename,
+            "filename": file_upload.filename if file_upload else "unknown",
             "status": "error",
             "message": f"Error processing file: {str(e)}"
-        } """
+        }
+
+@app.post("/test")
+async def test_endpoint():
+    return {"message": "Test endpoint working"}
+
+# Simple test endpoint for file upload without PDF processing
+@app.post("/test-upload/")
+async def test_upload(file_upload: UploadFile = File(...)):
+    print(f"TEST UPLOAD: Received {file_upload.filename}")
+    try:
+        content = await file_upload.read()
+        return {
+            "filename": file_upload.filename,
+            "size": len(content),
+            "content_type": file_upload.content_type,
+            "status": "success",
+            "message": "File received successfully without processing"
+        }
+    except Exception as e:
+        return {
+            "status": "error", 
+            "message": f"Error: {str(e)}"
+        }
