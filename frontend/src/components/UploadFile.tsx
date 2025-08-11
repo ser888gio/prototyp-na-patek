@@ -31,19 +31,23 @@ export default function FileUploader() {
     setUploadProgress(0);
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("upload_file", file);
 
     try {
       //Dává se post na backend, kde běž aplikace s endpointem upload
       //It sends the request to the backend
-      const response = await axios.post("http://127.0.0.1:2024", formData, {
-        onUploadProgress: (progressEvent) => {
-          const progress = progressEvent.total
-            ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
-            : 0;
-          setUploadProgress(progress);
-        },
-      });
+      const response = await axios.post(
+        "http://127.0.0.1:2024/uploadfile/",
+        formData,
+        {
+          onUploadProgress: (progressEvent) => {
+            const progress = progressEvent.total
+              ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
+              : 0;
+            setUploadProgress(progress);
+          },
+        }
+      );
 
       const result: UploadResponse = response.data;
       setUploadResult(result);
