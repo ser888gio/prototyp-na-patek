@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SquarePen, Brain, Send, StopCircle } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
-import FileUploader from "./UploadFile";
+import { FileUploader } from "./UploadFile";
 import {
   Select,
   SelectContent,

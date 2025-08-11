@@ -25,8 +25,7 @@ async def main():
     #Embedding of the upcoming text. The model is Open source - Sentences Transformers. Batch embedding for faster process
     def get_embeddings_batch(texts: str):
         model = SentenceTransformer("intfloat/multilingual-e5-large")
-        return model.encode(texts).toList() #pinecone wants it to be inserted as a list
-    
+        return model.encode(texts).toList() #pinecone wants it to be inserted as a list. Because the embeddings are a list of floats    
     
 
 if __name__=="__main__":
