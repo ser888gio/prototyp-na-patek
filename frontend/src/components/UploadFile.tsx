@@ -49,7 +49,7 @@ export default function FileUploader() {
       //Dává se post na backend, kde běž aplikace s endpointem upload
       //It sends the request to the backend
       const response = await axios.post(
-        "http://127.0.0.1:2024/uploadfile/",
+        "http://127.0.0.1:2024/uploadfilepleasefortheloveofgod/",
         formData,
         {
           onUploadProgress: (progressEvent) => {

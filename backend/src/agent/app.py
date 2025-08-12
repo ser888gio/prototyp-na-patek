@@ -1,6 +1,6 @@
 # mypy: disable - error - code = "no-untyped-def,misc"
 import pathlib
-from fastapi import FastAPI, Response, UploadFile, File, HTTPException
+from fastapi import FastAPI, Response, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
 import boto3
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,27 +14,33 @@ from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from pinecone import Pinecone, ServerlessSpec
 import os
 from dotenv import load_dotenv
+import asyncio
 
 load_dotenv()
 
-def pinecone_connector_start():
+async def pinecone_connector_start():
+    # Wrap Pinecone operations in asyncio.to_thread to avoid blocking
+    def _create_pinecone_client():
+        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 
-    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+        index_name = "langchain-test-index"  # change if desired
 
-    index_name = "langchain-test-index"  # change if desired
+        if not pc.has_index(index_name):
+            pc.create_index(
+                name=index_name,
+                dimension=384,  # Changed to match HuggingFace all-MiniLM-L12-v2 model
+                metric="cosine",
+                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+            )
 
-    if not pc.has_index(index_name):
-        pc.create_index(
-            name=index_name,
-            dimension=384,  # Changed to match HuggingFace all-MiniLM-L12-v2 model
-            metric="cosine",
-            spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-        )
+        index = pc.Index(index_name)
+        return pc  # Return the Pinecone client
+    
+    return await asyncio.to_thread(_create_pinecone_client)
 
-    index = pc.Index(index_name)
-    return pc  # Return the Pinecone client
-
-pinecone_connector = pinecone_connector_start()
+# Initialize pinecone connector as a coroutine that will be awaited when needed
+async def get_pinecone_connector():
+    return await pinecone_connector_start()
 
 # Define the FastAPI app
 app = FastAPI()
@@ -161,10 +167,14 @@ async def initialize_vector_store():
     """Initialize the vector store with embeddings model"""
     global vector_store, retriever
     
-    # Create the embedding model instance for the vector store
-    embeddings_model = HuggingFaceEmbeddings(model_name='sentence-transformers/all-MiniLM-L12-v2')
+    # Wrap the embedding model creation in asyncio.to_thread
+    embeddings_model = await asyncio.to_thread(
+        HuggingFaceEmbeddings, 
+        model_name='sentence-transformers/all-MiniLM-L12-v2'
+    )
     
-    # Get the index from the Pinecone client
+    # Get the Pinecone client and index
+    pinecone_connector = await get_pinecone_connector()
     index = pinecone_connector.Index("langchain-test-index")
     
     # Create the vector store with the Pinecone index
@@ -182,10 +192,13 @@ async def initialize_vector_store():
     return vector_store
 
 
-@app.post("/uploadfile/")
-#Poznámka do budoucna: měl jsem daný kod: file_upload: UploadFile = File(...), což mi to celý kazilo
-async def upload_file(file_upload: UploadFile):
+@app.post("/uploadfilepleasefortheloveofgod/")
+async def upload_file(request: Request):
     global vector_store
+    
+    form = await request.form()
+    print("Form keys:", form.keys())
+    file_upload = form.get("file_upload")
 
     print(f"========== UPLOAD DEBUG START ==========")
     print(f"Received file upload request")
@@ -204,21 +217,20 @@ async def upload_file(file_upload: UploadFile):
         print(f"Step 1: Reading file content...")
         # Read the file content
         file_content = await file_upload.read()
-        print(f"File content length: {len(file_content)} bytes")
-        print(f"First 100 bytes: {file_content[:100]}")
         
         # Save to temporary file for inspection
         import tempfile
         import os
         temp_file_path = None
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                temp_file.write(file_content)
-                temp_file_path = temp_file.name
-            print(f"Temporary file saved at: {temp_file_path}")
+            # Use asyncio.to_thread for file operations to avoid blocking
+            async def create_temp_file(content):
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                    await temp_file.write(content)
+                    return temp_file.name
             
-            # Reset file pointer for further processing
-            await file_upload.seek(0)
+            temp_file_path = await asyncio.to_thread(create_temp_file, file_content)
+            print(f"Temporary file saved at: {temp_file_path}")
             
             print(f"Step 2: Initializing vector store...")
             if vector_store is None:
@@ -226,7 +238,7 @@ async def upload_file(file_upload: UploadFile):
                 print("Vector store initialized successfully")
             
             print(f"Step 3: Calling load_pdf with temp file...")
-            # Load and process the PDF using the temporary file path
+            # Load and process the PDF using the async function directly
             pages = await load_pdf(temp_file_path)
             print(f"load_pdf returned {len(pages) if pages else 0} pages")
             
@@ -238,12 +250,14 @@ async def upload_file(file_upload: UploadFile):
             print(f"Full text length: {len(full_text)} characters")
 
             print(f"Step 4: Splitting text into chunks...")
-            chunks = split_text_into_chunks(full_text)
+            # Wrap text splitting in asyncio.to_thread
+            chunks = await asyncio.to_thread(split_text_into_chunks, full_text)
             print(f"Created {len(chunks)} chunks")
 
             if vector_store and chunks:
                 print(f"Step 5: Adding chunks to vector store...")
-                vector_store.add_texts(chunks)
+                # Wrap vector store operations in asyncio.to_thread
+                await asyncio.to_thread(vector_store.add_texts, chunks)
                 print(f"Added {len(chunks)} chunks to vector store")
 
             print("========== UPLOAD SUCCESS ==========")
@@ -256,9 +270,9 @@ async def upload_file(file_upload: UploadFile):
             }
             
         finally:
-            # Clean up temporary file
-            if temp_file_path and os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
+            # Clean up temporary file using async thread wrapper
+            if temp_file_path:
+                await asyncio.to_thread(lambda: os.path.exists(temp_file_path) and os.unlink(temp_file_path))
                 print(f"Cleaned up temporary file: {temp_file_path}")
                 
     except Exception as e:
@@ -276,25 +290,3 @@ async def upload_file(file_upload: UploadFile):
             "message": f"Error processing file: {str(e)}"
         }
 
-@app.post("/test")
-async def test_endpoint():
-    return {"message": "Test endpoint working"}
-
-# Simple test endpoint for file upload without PDF processing
-@app.post("/test-upload/")
-async def test_upload(file_upload: UploadFile = File(...)):
-    print(f"TEST UPLOAD: Received {file_upload.filename}")
-    try:
-        content = await file_upload.read()
-        return {
-            "filename": file_upload.filename,
-            "size": len(content),
-            "content_type": file_upload.content_type,
-            "status": "success",
-            "message": "File received successfully without processing"
-        }
-    except Exception as e:
-        return {
-            "status": "error", 
-            "message": f"Error: {str(e)}"
-        }

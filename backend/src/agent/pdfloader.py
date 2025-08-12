@@ -5,10 +5,13 @@ import os
 async def load_pdf(file_path: str):
     print(f"=== load_pdf DEBUG START ===")
     print(f"Input file_path: {file_path}")
-    print(f"File exists: {os.path.exists(file_path) if isinstance(file_path, str) else 'N/A'}")
     
-    if isinstance(file_path, str) and os.path.exists(file_path):
-        file_size = os.path.getsize(file_path)
+    # Wrap blocking os operations in asyncio.to_thread
+    file_exists = await asyncio.to_thread(os.path.exists, file_path) if isinstance(file_path, str) else False
+    print(f"File exists: {file_exists}")
+    
+    if isinstance(file_path, str) and file_exists:
+        file_size = await asyncio.to_thread(os.path.getsize, file_path)
         print(f"File size: {file_size} bytes")
     
     try:
