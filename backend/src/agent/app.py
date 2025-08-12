@@ -1,7 +1,5 @@
 # mypy: disable - error - code = "no-untyped-def,misc"
 import pathlib
-from queue import Queue
-from threading import Thread
 from fastapi import FastAPI, Response, UploadFile, File, HTTPException
 from fastapi.staticfiles import StaticFiles
 import boto3
@@ -16,8 +14,6 @@ from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from pinecone import Pinecone, ServerlessSpec
 import os
 from dotenv import load_dotenv
-
-import aiofiles
 
 load_dotenv()
 
@@ -43,13 +39,16 @@ pinecone_connector = pinecone_connector_start()
 # Define the FastAPI app
 app = FastAPI()
 
+from fastapi.middleware.cors import CORSMiddleware
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173", "http://127.0.0.1:5174"],
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 class Filelike:
     def __init__(self, q):
@@ -183,8 +182,9 @@ async def initialize_vector_store():
     return vector_store
 
 
-@app.post("/uploadfilepleasefortheloveofgod/")
-async def upload_file(file_upload: UploadFile = File(...)):
+@app.post("/uploadfile/")
+#Poznámka do budoucna: měl jsem daný kod: file_upload: UploadFile = File(...), což mi to celý kazilo
+async def upload_file(file_upload: UploadFile):
     global vector_store
 
     print(f"========== UPLOAD DEBUG START ==========")
