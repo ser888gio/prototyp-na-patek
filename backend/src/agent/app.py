@@ -28,7 +28,7 @@ async def pinecone_connector_start():
         if not pc.has_index(index_name):
             pc.create_index(
                 name=index_name,
-                dimension=1024,  # Changed to match HuggingFace all-MiniLM-L12-v2 model
+                dimension=384,  # Changed to match HuggingFace all-MiniLM-L12-v2 model
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1"),
             )

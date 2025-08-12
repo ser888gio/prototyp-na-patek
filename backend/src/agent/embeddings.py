@@ -61,7 +61,7 @@ class PineconeEmbeddings(BaseModel):
                 "batch_size": 96,
                 "query_params": {"input_type": "query", "truncate": "END"},
                 "document_params": {"input_type": "passage", "truncate": "END"},
-                "dimension": 1024,
+                "dimension": 384,
             }            
         }
 

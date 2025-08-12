@@ -25,7 +25,7 @@ async def initialize_pinecone_async():
             print("Index not found")
             pc.create_index(
                 name=index_name,
-                dimension=1024,
+                dimension=384,
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1")
             )

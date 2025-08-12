@@ -58,7 +58,7 @@ async def initialize_vector_store():
 ```python
 async def split_text_into_chunks(pages):
     def _split_sync():
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=150)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=384, chunk_overlap=150)
         return text_splitter.split_text(pages)
     
     return await asyncio.to_thread(_split_sync)

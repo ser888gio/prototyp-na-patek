@@ -102,7 +102,7 @@ export default function FileUploader() {
       {file_upload && (
         <div className="mb-4 text-sm">
           <p>File name: {file_upload.name}</p>
-          <p>Size: {(file_upload.size / 1024).toFixed(2)} KB</p>
+          <p>Size: {(file_upload.size / 384).toFixed(2)} KB</p>
           <p>Type: {file_upload.type}</p>
         </div>
       )}
