@@ -7,10 +7,14 @@ async def load_pdf(file_path: str):
     print(f"Input file_path: {file_path}")
     
     # Wrap blocking os operations in asyncio.to_thread
-    file_exists = await asyncio.to_thread(os.path.exists, file_path) if isinstance(file_path, str) else False
+    if not isinstance(file_path, str):
+        print(f"ERROR: file_path is not a string, it's {type(file_path)}")
+        raise ValueError(f"file_path must be a string, got {type(file_path)}")
+    
+    file_exists = await asyncio.to_thread(os.path.exists, file_path)
     print(f"File exists: {file_exists}")
     
-    if isinstance(file_path, str) and file_exists:
+    if file_exists:
         file_size = await asyncio.to_thread(os.path.getsize, file_path)
         print(f"File size: {file_size} bytes")
     

@@ -28,7 +28,7 @@ async def pinecone_connector_start():
         if not pc.has_index(index_name):
             pc.create_index(
                 name=index_name,
-                dimension=384,  # Changed to match HuggingFace all-MiniLM-L12-v2 model
+                dimension=1024,  # Changed to match HuggingFace all-MiniLM-L12-v2 model
                 metric="cosine",
                 spec=ServerlessSpec(cloud="aws", region="us-east-1"),
             )
@@ -192,7 +192,7 @@ async def initialize_vector_store():
     return vector_store
 
 
-@app.post("/uploadfilepleasefortheloveofgod/")
+@app.post("/uploadfile/")
 async def upload_file(request: Request):
     global vector_store
     
@@ -224,9 +224,9 @@ async def upload_file(request: Request):
         temp_file_path = None
         try:
             # Use asyncio.to_thread for file operations to avoid blocking
-            async def create_temp_file(content):
+            def create_temp_file(content):
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                    await temp_file.write(content)
+                    temp_file.write(content)
                     return temp_file.name
             
             temp_file_path = await asyncio.to_thread(create_temp_file, file_content)
@@ -250,8 +250,8 @@ async def upload_file(request: Request):
             print(f"Full text length: {len(full_text)} characters")
 
             print(f"Step 4: Splitting text into chunks...")
-            # Wrap text splitting in asyncio.to_thread
-            chunks = await asyncio.to_thread(split_text_into_chunks, full_text)
+            # Call the async function directly since it already handles threading
+            chunks = await split_text_into_chunks(full_text)
             print(f"Created {len(chunks)} chunks")
 
             if vector_store and chunks:

@@ -25,31 +25,21 @@ export default function FileUploader() {
   }
 
   async function handleFileUpload() {
-    console.log("=== UPLOAD START ===");
     if (!file_upload) {
       console.log("No file selected, returning");
       return;
     }
-
-    console.log("Selected file:", file_upload);
     setStatus("uploading");
     setUploadProgress(0);
 
     const formData = new FormData();
     formData.append("file_upload", file_upload);
-    console.log("FormData created and file appended");
-    console.log(formData.get("file_upload"));
 
     try {
-      console.log("About to make axios request...");
-
-      // First, let's try a simple test to see if the endpoint exists
-      console.log("Testing endpoint availability...");
-
       //Dává se post na backend, kde běž aplikace s endpointem upload
       //It sends the request to the backend
       const response = await axios.post(
-        "http://127.0.0.1:2024/uploadfilepleasefortheloveofgod/",
+        "http://127.0.0.1:2024/uploadfile/",
         formData,
         {
           onUploadProgress: (progressEvent) => {
@@ -57,15 +47,9 @@ export default function FileUploader() {
               ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
               : 0;
             setUploadProgress(progress);
-            console.log("Upload progress:", progress + "%");
           },
         }
       );
-
-      console.log("=== AXIOS REQUEST COMPLETED ===");
-      console.log("Response:", response);
-      console.log("FormData file_upload:", formData.get("file_upload"));
-      console.log("Selected file object:", file_upload);
 
       const result: UploadResponse = response.data;
       setUploadResult(result);
@@ -73,9 +57,6 @@ export default function FileUploader() {
       setStatus("success");
       setUploadProgress(100);
     } catch (error) {
-      console.log("=== ERROR CAUGHT ===");
-      console.error("Upload error:", error);
-
       if (axios.isAxiosError(error)) {
         console.error("Axios error details:");
         console.error("- Status:", error.response?.status);
@@ -97,8 +78,6 @@ export default function FileUploader() {
       setStatus("error");
       setUploadProgress(0);
     }
-
-    console.log("=== UPLOAD FUNCTION END ===");
   }
 
   return (
