@@ -160,6 +160,48 @@ async def health_check():
 async def test_endpoint():
     return {"message": "Test endpoint working"}
 
+@app.get("/vector-store/status")
+async def vector_store_status():
+    """Check the status of the vector store"""
+    global vector_store, retriever
+    
+    try:
+        if vector_store is None:
+            return {
+                "status": "not_initialized",
+                "message": "Vector store not initialized"
+            }
+        
+        # Try to get some basic info about the vector store
+        return {
+            "status": "initialized",
+            "message": "Vector store is ready",
+            "retriever_available": retriever is not None,
+            "vector_store_type": type(vector_store).__name__
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Error checking vector store: {str(e)}"
+        }
+
+@app.get("/debug/langgraph")
+async def debug_langgraph():
+    """Debug endpoint to test LangGraph integration"""
+    try:
+        # Test if we can access the graph
+        from agent.graph import graph
+        return {
+            "status": "success",
+            "message": "LangGraph is accessible",
+            "graph_name": graph.name if hasattr(graph, 'name') else "unknown"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"LangGraph error: {str(e)}"
+        }
+
 vector_store = None
 retriever = None
 
@@ -190,6 +232,81 @@ async def initialize_vector_store():
     )
     
     return vector_store
+
+
+@app.post("/query/")
+async def query_documents(request: Request):
+    """Query the vector database for relevant documents"""
+    global vector_store, retriever
+    
+    try:
+        # Parse the request body
+        body = await request.json()
+        query_text = body.get("query", "").strip()
+        
+        if not query_text:
+            return {
+                "status": "error",
+                "message": "Query text is required"
+            }
+        
+        print(f"========== QUERY DEBUG START ==========")
+        print(f"Received query: {query_text}")
+        
+        # Initialize vector store if not already done
+        if vector_store is None:
+            print("Initializing vector store...")
+            await initialize_vector_store()
+            print("Vector store initialized")
+        
+        if retriever is None:
+            print("ERROR: Retriever not available")
+            return {
+                "status": "error",
+                "message": "Vector database not properly initialized"
+            }
+        
+        # Perform the search using the retriever
+        print("Performing similarity search...")
+        relevant_docs = await asyncio.to_thread(
+            retriever.get_relevant_documents, 
+            query_text
+        )
+        
+        print(f"Found {len(relevant_docs)} relevant documents")
+        
+        # Format the results
+        results = []
+        for i, doc in enumerate(relevant_docs):
+            results.append({
+                "id": i,
+                "content": doc.page_content,
+                "metadata": doc.metadata,
+                "score": getattr(doc, 'score', None)  # Some retrievers include scores
+            })
+            print(f"Document {i} preview: {doc.page_content[:200]}...")
+        
+        print("========== QUERY SUCCESS ==========")
+        return {
+            "status": "success",
+            "query": query_text,
+            "results": results,
+            "count": len(results)
+        }
+        
+    except Exception as e:
+        print(f"========== QUERY ERROR ==========")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {str(e)}")
+        import traceback
+        print(f"Full traceback:")
+        traceback.print_exc()
+        print(f"========== ERROR END ==========")
+        
+        return {
+            "status": "error",
+            "message": f"Error querying documents: {str(e)}"
+        }
 
 
 @app.post("/uploadfile/")

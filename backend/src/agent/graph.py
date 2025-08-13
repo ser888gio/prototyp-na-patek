@@ -31,6 +31,12 @@ from agent.utils import (
     resolve_urls,
 )
 
+# Import RAG components
+import asyncio
+from langchain_pinecone import PineconeVectorStore
+from langchain_huggingface.embeddings import HuggingFaceEmbeddings
+from pinecone import Pinecone, ServerlessSpec
+
 load_dotenv()
 
 if os.getenv("GEMINI_API_KEY") is None:
@@ -38,6 +44,55 @@ if os.getenv("GEMINI_API_KEY") is None:
 
 # Used for Google Search API
 genai_client = Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+# Global RAG components
+vector_store = None
+retriever = None
+
+async def initialize_rag_system():
+    """Initialize the RAG system with vector store and retriever"""
+    global vector_store, retriever
+    
+    try:
+        # Initialize Pinecone
+        def _create_pinecone_client():
+            pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+            index_name = "langchain-test-index"
+            
+            if not pc.has_index(index_name):
+                pc.create_index(
+                    name=index_name,
+                    dimension=384,
+                    metric="cosine",
+                    spec=ServerlessSpec(cloud="aws", region="us-east-1"),
+                )
+            
+            return pc.Index(index_name)
+        
+        index = await asyncio.to_thread(_create_pinecone_client)
+        
+        # Initialize embeddings
+        embeddings_model = await asyncio.to_thread(
+            HuggingFaceEmbeddings, 
+            model_name='sentence-transformers/all-MiniLM-L12-v2'
+        )
+        
+        # Create vector store
+        vector_store = PineconeVectorStore(
+            index=index, 
+            embedding=embeddings_model
+        )
+        
+        # Create retriever
+        retriever = vector_store.as_retriever(
+            search_type="similarity_score_threshold",
+            search_kwargs={"k": 3, "score_threshold": 0.4},
+        )
+        
+        return True
+    except Exception as e:
+        print(f"Failed to initialize RAG system: {e}")
+        return False
 
 # Nodes
 def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerationState:
@@ -95,6 +150,73 @@ def generate_query(state: OverallState, config: RunnableConfig) -> QueryGenerati
         research_topic = get_research_topic(state["messages"])
         print(f"Error in generate_query: {e}. Using fallback query.")
         return {"search_query": [research_topic]}
+
+async def rag_search(state: OverallState, config: RunnableConfig) -> OverallState:
+    """LangGraph node that performs RAG search using the vector database.
+    
+    This node searches the vector database for relevant documents and adds them
+    to the research results.
+    
+    Args:
+        state: Current graph state containing the user's question
+        config: Configuration for the runnable
+        
+    Returns:
+        Dictionary with state update, including rag_results and sources_gathered
+    """
+    global vector_store, retriever
+    
+    try:
+        # Initialize RAG system if not already done
+        if vector_store is None or retriever is None:
+            rag_initialized = await initialize_rag_system()
+            if not rag_initialized:
+                return {
+                    "rag_results": ["RAG system not available"],
+                    "sources_gathered": state.get("sources_gathered", [])
+                }
+        
+        # Get the research topic from messages
+        research_topic = get_research_topic(state["messages"])
+        
+        # Perform RAG search
+        relevant_docs = await asyncio.to_thread(
+            retriever.get_relevant_documents, 
+            research_topic
+        )
+        
+        # Format RAG results
+        rag_results = []
+        rag_sources = []
+        
+        for i, doc in enumerate(relevant_docs):
+            # Create a formatted result
+            result_text = f"Document {i+1} (from vector database):\n{doc.page_content}"
+            rag_results.append(result_text)
+            
+            # Add to sources (format similar to web sources)
+            rag_sources.append({
+                "label": f"rag_doc_{i}",
+                "short_url": f"rag://doc_{i}",
+                "value": f"Vector Database Document {i+1}",
+                "type": "rag"
+            })
+        
+        # Combine with existing sources
+        existing_sources = state.get("sources_gathered", [])
+        updated_sources = existing_sources + rag_sources
+        
+        return {
+            "rag_results": rag_results,
+            "sources_gathered": updated_sources
+        }
+        
+    except Exception as e:
+        print(f"Error in rag_search: {e}")
+        return {
+            "rag_results": [f"Error searching vector database: {str(e)}"],
+            "sources_gathered": state.get("sources_gathered", [])
+        }
 
 def continue_to_web_research(state: QueryGenerationState):
     """LangGraph node that sends the search queries to the web research node.
@@ -310,12 +432,12 @@ def evaluate_research(
 def finalize_answer(state: OverallState, config: RunnableConfig):
     """LangGraph node that finalizes the research summary.
 
-    Prepares the final output by deduplicating and formatting sources, then
-    combining them with the running summary to create a well-structured
+    Prepares the final output by combining web research and RAG results,
+    deduplicating and formatting sources, then creating a well-structured
     research report with proper citations.
 
     Args:
-        state: Current graph state containing the running summary and sources gathered
+        state: Current graph state containing the running summary, web research results, and RAG results
 
     Returns:
         Dictionary with state update, including running_summary key containing the formatted final summary with sources
@@ -323,12 +445,29 @@ def finalize_answer(state: OverallState, config: RunnableConfig):
     configurable = Configuration.from_runnable_config(config)
     reasoning_model = state.get("reasoning_model") or configurable.answer_model
 
+    # Combine web research and RAG results
+    web_summaries = state.get("web_research_result", [])
+    rag_summaries = state.get("rag_results", [])
+    
+    # Create a comprehensive summary from both sources
+    all_summaries = []
+    
+    if web_summaries:
+        all_summaries.append("=== Web Research Results ===")
+        all_summaries.extend(web_summaries)
+    
+    if rag_summaries:
+        all_summaries.append("\n=== Knowledge Base Results ===")
+        all_summaries.extend(rag_summaries)
+    
+    combined_summaries = "\n---\n\n".join(all_summaries)
+
     # Format the prompt
     current_date = get_current_date()
     formatted_prompt = answer_instructions.format(
         current_date=current_date,
         research_topic=get_research_topic(state["messages"]),
-        summaries="\n---\n\n".join(state["web_research_result"]),
+        summaries=combined_summaries,
     )
 
     # init Reasoning Model, default to Gemini 2.0
@@ -359,6 +498,7 @@ builder = StateGraph(OverallState, config_schema=Configuration)
 
 # Define the nodes we will cycle between
 builder.add_node("generate_query", generate_query)
+builder.add_node("rag_search", rag_search)
 builder.add_node("web_research", web_research)
 builder.add_node("reflection", reflection)
 builder.add_node("finalize_answer", finalize_answer)
@@ -366,9 +506,11 @@ builder.add_node("finalize_answer", finalize_answer)
 # Set the entrypoint as `generate_query`
 # This means that this node is the first one called
 builder.add_edge(START, "generate_query")
+# First perform RAG search
+builder.add_edge("generate_query", "rag_search")
 # Add conditional edge to continue with search queries in a parallel branch
 builder.add_conditional_edges(
-    "generate_query", continue_to_web_research, ["web_research"]
+    "rag_search", continue_to_web_research, ["web_research"]
 )
 # Reflect on the web research
 builder.add_edge("web_research", "reflection")
