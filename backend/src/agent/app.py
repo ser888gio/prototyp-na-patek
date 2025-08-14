@@ -160,19 +160,107 @@ async def health_check():
 async def test_endpoint():
     return {"message": "Test endpoint working"}
 
+@app.post("/test-retrieval")
+async def test_retrieval():
+    """Test endpoint to demonstrate vector store retrieval with detailed logging"""
+    global vector_store, retriever
+    
+    test_queries = [
+        "What is the main topic?",
+        "Summary",
+        "Key points",
+        "Important information"
+    ]
+    
+    print(f"========== TESTING VECTOR STORE RETRIEVAL ==========")
+    
+    try:
+        # Initialize vector store if not already done
+        if vector_store is None:
+            print("Initializing vector store for test...")
+            await initialize_vector_store()
+        
+        if retriever is None:
+            return {
+                "status": "error",
+                "message": "Retriever not available"
+            }
+        
+        results = {}
+        
+        for query in test_queries:
+            print(f"\n--- Testing query: '{query}' ---")
+            
+            try:
+                relevant_docs = await asyncio.to_thread(
+                    retriever.get_relevant_documents, 
+                    query
+                )
+                
+                print(f"Found {len(relevant_docs)} documents for query: '{query}'")
+                
+                query_results = []
+                for i, doc in enumerate(relevant_docs):
+                    print(f"  Doc {i+1}: {len(doc.page_content)} chars, metadata: {doc.metadata}")
+                    query_results.append({
+                        "content_length": len(doc.page_content),
+                        "content_preview": doc.page_content[:100] + "..." if len(doc.page_content) > 100 else doc.page_content,
+                        "metadata": doc.metadata
+                    })
+                
+                results[query] = {
+                    "count": len(relevant_docs),
+                    "documents": query_results
+                }
+                
+            except Exception as e:
+                print(f"Error with query '{query}': {e}")
+                results[query] = {
+                    "error": str(e)
+                }
+        
+        print(f"========== END RETRIEVAL TEST ==========")
+        
+        return {
+            "status": "success",
+            "message": "Retrieval test completed",
+            "results": results
+        }
+        
+    except Exception as e:
+        print(f"Test retrieval error: {e}")
+        return {
+            "status": "error",
+            "message": f"Test failed: {str(e)}"
+        }
+
 @app.get("/vector-store/status")
 async def vector_store_status():
     """Check the status of the vector store"""
     global vector_store, retriever
     
     try:
+        print(f"========== VECTOR STORE STATUS CHECK ==========")
+        
         if vector_store is None:
+            print(f"❌ Vector store: NOT INITIALIZED")
             return {
                 "status": "not_initialized",
                 "message": "Vector store not initialized"
             }
         
+        print(f"✅ Vector store: INITIALIZED")
+        print(f"   Type: {type(vector_store).__name__}")
+        
+        if retriever is None:
+            print(f"❌ Retriever: NOT AVAILABLE")
+        else:
+            print(f"✅ Retriever: AVAILABLE")
+            print(f"   Type: {type(retriever).__name__}")
+            
         # Try to get some basic info about the vector store
+        print(f"========== END STATUS CHECK ==========")
+        
         return {
             "status": "initialized",
             "message": "Vector store is ready",
@@ -180,26 +268,75 @@ async def vector_store_status():
             "vector_store_type": type(vector_store).__name__
         }
     except Exception as e:
+        print(f"❌ Error checking vector store: {str(e)}")
         return {
             "status": "error",
             "message": f"Error checking vector store: {str(e)}"
         }
 
-@app.get("/debug/langgraph")
-async def debug_langgraph():
-    """Debug endpoint to test LangGraph integration"""
+@app.get("/vector-store/info")
+async def vector_store_info():
+    """Get detailed information about what's stored in the vector store"""
+    global vector_store, retriever
+    
     try:
-        # Test if we can access the graph
-        from agent.graph import graph
+        print(f"========== VECTOR STORE INFO REQUEST ==========")
+        
+        if vector_store is None:
+            print(f"❌ Vector store not initialized")
+            return {
+                "status": "not_initialized",
+                "message": "Vector store not initialized"
+            }
+        
+        # Try to get some sample documents to show what's stored
+        sample_queries = ["", "document", "text", "content", "information"]
+        stored_content_info = []
+        
+        for query in sample_queries:
+            try:
+                if retriever:
+                    docs = await asyncio.to_thread(
+                        retriever.get_relevant_documents, 
+                        query if query else "sample"
+                    )
+                    
+                    if docs:
+                        print(f"Query '{query}' returned {len(docs)} documents")
+                        for i, doc in enumerate(docs[:2]):  # Show first 2 docs
+                            content_info = {
+                                "query_used": query,
+                                "document_index": i,
+                                "content_length": len(doc.page_content),
+                                "content_preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
+                                "metadata": doc.metadata,
+                                "has_score": hasattr(doc, 'score')
+                            }
+                            stored_content_info.append(content_info)
+                            print(f"  Found content: {content_info['content_length']} chars, metadata: {content_info['metadata']}")
+                        break  # Stop after finding some content
+                    else:
+                        print(f"Query '{query}' returned no documents")
+                        
+            except Exception as e:
+                print(f"Error querying with '{query}': {e}")
+                continue
+        
+        print(f"========== END VECTOR STORE INFO ==========")
+        
         return {
             "status": "success",
-            "message": "LangGraph is accessible",
-            "graph_name": graph.name if hasattr(graph, 'name') else "unknown"
+            "vector_store_type": type(vector_store).__name__,
+            "retriever_available": retriever is not None,
+            "sample_content": stored_content_info,
+            "total_samples_found": len(stored_content_info)
         }
+        
     except Exception as e:
+        print(f"❌ Error getting vector store info: {str(e)}")
         return {
             "status": "error",
-            "message": f"LangGraph error: {str(e)}"
+            "message": f"Error getting vector store info: {str(e)}"
         }
 
 vector_store = None
@@ -209,27 +346,39 @@ async def initialize_vector_store():
     """Initialize the vector store with embeddings model"""
     global vector_store, retriever
     
+    print(f"========== INITIALIZING VECTOR STORE ==========")
+    print(f"Loading HuggingFace embeddings model: sentence-transformers/all-MiniLM-L12-v2")
+    
     # Wrap the embedding model creation in asyncio.to_thread
     embeddings_model = await asyncio.to_thread(
         HuggingFaceEmbeddings, 
         model_name='sentence-transformers/all-MiniLM-L12-v2'
     )
+    print(f"✅ Embeddings model loaded successfully")
     
+    print(f"Connecting to Pinecone...")
     # Get the Pinecone client and index
     pinecone_connector = await get_pinecone_connector()
     index = pinecone_connector.Index("langchain-test-index")
+    print(f"✅ Connected to Pinecone index: langchain-test-index")
     
     # Create the vector store with the Pinecone index
     vector_store = PineconeVectorStore(
         index=index, 
         embedding=embeddings_model
     )
+    print(f"✅ Vector store created: {type(vector_store).__name__}")
     
     # Create retriever
     retriever = vector_store.as_retriever(
         search_type="similarity_score_threshold",
-        search_kwargs={"k": 3, "score_threshold": 0.4},
+        search_kwargs={"k": 5, "score_threshold": 0.4},
     )
+    print(f"✅ Retriever created with config:")
+    print(f"   - search_type: similarity_score_threshold")
+    print(f"   - k (max results): 3")
+    print(f"   - score_threshold: 0.4")
+    print(f"========== VECTOR STORE INITIALIZATION COMPLETE ==========\n")
     
     return vector_store
 
@@ -273,18 +422,32 @@ async def query_documents(request: Request):
             query_text
         )
         
+        print(f"========== VECTOR STORE RETRIEVAL RESULTS ==========")
+        print(f"Query: '{query_text}'")
         print(f"Found {len(relevant_docs)} relevant documents")
+        print(f"Retriever config: search_type=similarity_score_threshold, k=3, score_threshold=0.4")
         
-        # Format the results
+        # Format the results and print detailed information
         results = []
         for i, doc in enumerate(relevant_docs):
+            print(f"\n--- Document {i+1} ---")
+            print(f"Content length: {len(doc.page_content)} characters")
+            print(f"Metadata: {doc.metadata}")
+            score = getattr(doc, 'score', None)
+            if score is not None:
+                print(f"Similarity score: {score}")
+            print(f"Content preview (first 300 chars): {doc.page_content[:300]}...")
+            if len(doc.page_content) > 300:
+                print(f"Content preview (last 100 chars): ...{doc.page_content[-100:]}")
+            
             results.append({
                 "id": i,
                 "content": doc.page_content,
                 "metadata": doc.metadata,
-                "score": getattr(doc, 'score', None)  # Some retrievers include scores
+                "score": score
             })
-            print(f"Document {i} preview: {doc.page_content[:200]}...")
+        
+        print(f"========== END RETRIEVAL RESULTS ==========\n")
         
         print("========== QUERY SUCCESS ==========")
         return {
@@ -370,12 +533,27 @@ async def upload_file(request: Request):
             # Call the async function directly since it already handles threading
             chunks = await split_text_into_chunks(full_text)
             print(f"Created {len(chunks)} chunks")
+            print(f"========== CHUNK ANALYSIS ==========")
+            for i, chunk in enumerate(chunks[:3]):  # Show first 3 chunks as examples
+                print(f"Chunk {i+1} (length: {len(chunk)} chars): {chunk[:200]}...")
+            if len(chunks) > 3:
+                print(f"... and {len(chunks) - 3} more chunks")
+            print(f"========== END CHUNK ANALYSIS ==========")
 
             if vector_store and chunks:
                 print(f"Step 5: Adding chunks to vector store...")
+                print(f"Vector store type: {type(vector_store).__name__}")
+                print(f"Number of chunks to add: {len(chunks)}")
+                
                 # Wrap vector store operations in asyncio.to_thread
                 await asyncio.to_thread(vector_store.add_texts, chunks)
-                print(f"Added {len(chunks)} chunks to vector store")
+                print(f"✅ Successfully added {len(chunks)} chunks to vector store")
+                print(f"Each chunk will be embedded and stored for future retrieval")
+            else:
+                if not vector_store:
+                    print(f"❌ Vector store not available - chunks not added")
+                if not chunks:
+                    print(f"❌ No chunks created - nothing to add to vector store")
 
             print("========== UPLOAD SUCCESS ==========")
             return {

@@ -75,6 +75,9 @@ Example:
 
 Reflect carefully on the Summaries to identify knowledge gaps and produce a follow-up query. Then, produce your output following this JSON format:
 
+Context:
+{rag_results}
+
 Summaries:
 {summaries}
 """

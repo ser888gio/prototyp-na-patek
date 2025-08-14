@@ -54,44 +54,62 @@ async def initialize_rag_system():
     global vector_store, retriever
     
     try:
+        print(f"========== INITIALIZING RAG SYSTEM (GRAPH) ==========")
+        print(f"Creating Pinecone client...")
+        
         # Initialize Pinecone
         def _create_pinecone_client():
             pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
             index_name = "langchain-test-index"
             
             if not pc.has_index(index_name):
+                print(f"Index '{index_name}' not found, creating...")
                 pc.create_index(
                     name=index_name,
                     dimension=384,
                     metric="cosine",
                     spec=ServerlessSpec(cloud="aws", region="us-east-1"),
                 )
+                print(f"✅ Created new index: {index_name}")
+            else:
+                print(f"✅ Found existing index: {index_name}")
             
             return pc.Index(index_name)
         
         index = await asyncio.to_thread(_create_pinecone_client)
+        print(f"✅ Pinecone index ready")
         
         # Initialize embeddings
+        print(f"Loading HuggingFace embeddings model: sentence-transformers/all-MiniLM-L12-v2")
         embeddings_model = await asyncio.to_thread(
             HuggingFaceEmbeddings, 
             model_name='sentence-transformers/all-MiniLM-L12-v2'
         )
+        print(f"✅ Embeddings model loaded")
         
         # Create vector store
         vector_store = PineconeVectorStore(
             index=index, 
             embedding=embeddings_model
         )
+        print(f"✅ Vector store created: {type(vector_store).__name__}")
         
         # Create retriever
         retriever = vector_store.as_retriever(
             search_type="similarity_score_threshold",
             search_kwargs={"k": 3, "score_threshold": 0.4},
         )
+        print(f"✅ Retriever created with config:")
+        print(f"   - search_type: similarity_score_threshold")
+        print(f"   - k (max results): 3")
+        print(f"   - score_threshold: 0.4")
+        print(f"========== RAG SYSTEM INITIALIZATION COMPLETE (GRAPH) ==========\n")
         
         return True
     except Exception as e:
-        print(f"Failed to initialize RAG system: {e}")
+        print(f"❌ Failed to initialize RAG system: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 # Nodes
@@ -178,18 +196,33 @@ async def rag_search(state: OverallState, config: RunnableConfig) -> OverallStat
         
         # Get the research topic from messages
         research_topic = get_research_topic(state["messages"])
+        print(f"========== RAG SEARCH IN GRAPH ==========")
+        print(f"Research topic extracted: '{research_topic}'")
         
         # Perform RAG search
-        relevant_docs = await asyncio.to_thread(
-            retriever.get_relevant_documents, 
-            research_topic
-        )
+        print(f"Invoking retriever with topic: '{research_topic}'")
+        relevant_docs = await retriever.ainvoke(research_topic)
+        
+        print(f"========== VECTOR STORE EXTRACTION (GRAPH) ==========")
+        print(f"Query/Topic: '{research_topic}'")
+        print(f"Found {len(relevant_docs)} documents from vector store")
+        print(f"Retriever config: search_type=similarity_score_threshold, k=3, score_threshold=0.4")
         
         # Format RAG results
         rag_results = []
         rag_sources = []
         
         for i, doc in enumerate(relevant_docs):
+            print(f"\n--- RAG Document {i+1} (Graph Node) ---")
+            print(f"Content length: {len(doc.page_content)} characters")
+            print(f"Metadata: {doc.metadata}")
+            score = getattr(doc, 'score', None)
+            if score is not None:
+                print(f"Similarity score: {score}")
+            print(f"Content preview (first 300 chars): {doc.page_content[:300]}...")
+            if len(doc.page_content) > 300:
+                print(f"Content preview (last 100 chars): ...{doc.page_content[-100:]}")
+            
             # Create a formatted result
             result_text = f"Document {i+1} (from vector database):\n{doc.page_content}"
             rag_results.append(result_text)
@@ -201,14 +234,22 @@ async def rag_search(state: OverallState, config: RunnableConfig) -> OverallStat
                 "value": f"Vector Database Document {i+1}",
                 "type": "rag"
             })
+            
+            print(f"Added to rag_results: First 200 chars of formatted result: {result_text[:200]}...")
+            print(f"Added to sources: {rag_sources[-1]}")
+        
+        print(f"========== END RAG EXTRACTION (GRAPH) ==========\n")
         
         # Combine with existing sources
         existing_sources = state.get("sources_gathered", [])
         updated_sources = existing_sources + rag_sources
+
+        context_text = rag_results
         
         return {
             "rag_results": rag_results,
-            "sources_gathered": updated_sources
+            "sources_gathered": updated_sources,
+            "context_text": context_text
         }
         
     except Exception as e:
@@ -337,10 +378,16 @@ def reflection(state: OverallState, config: RunnableConfig) -> ReflectionState:
 
     # Format the prompt
     current_date = get_current_date()
+    
+    # Get RAG results for context
+    rag_results = state.get("rag_results", [])
+    rag_context = "\n\n---\n\n".join(rag_results) if rag_results else "No knowledge base results available."
+    
     formatted_prompt = reflection_instructions.format(
         current_date=current_date,
         research_topic=get_research_topic(state["messages"]),
         summaries="\n\n---\n\n".join(state["web_research_result"]),
+        rag_results=rag_context,
     )
     # init Reasoning Model
     llm = ChatGoogleGenerativeAI(
