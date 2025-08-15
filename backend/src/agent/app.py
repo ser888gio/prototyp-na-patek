@@ -1,10 +1,8 @@
 # mypy: disable - error - code = "no-untyped-def,misc"
 import pathlib
-from fastapi import FastAPI, Response, UploadFile, File, Request
+from fastapi import FastAPI, Response, Request
 from fastapi.staticfiles import StaticFiles
-import boto3
 from fastapi.middleware.cors import CORSMiddleware
-import os
 from dotenv import load_dotenv
 from agent.pdfloader import load_pdf
 from agent.text_splitter import split_text_into_chunks
@@ -12,7 +10,6 @@ from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 
 from agent.pinecone_connector import pinecone_connector_start
-import os
 from dotenv import load_dotenv
 import asyncio
 
