@@ -11,32 +11,12 @@ from agent.text_splitter import split_text_into_chunks
 from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 
-from pinecone import Pinecone, ServerlessSpec
+from agent.pinecone_connector import pinecone_connector_start
 import os
 from dotenv import load_dotenv
 import asyncio
 
 load_dotenv()
-
-async def pinecone_connector_start():
-    # Wrap Pinecone operations in asyncio.to_thread to avoid blocking
-    def _create_pinecone_client():
-        pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-
-        index_name = "langchain-test-index"  # change if desired
-
-        if not pc.has_index(index_name):
-            pc.create_index(
-                name=index_name,
-                dimension=384,  # Changed to match HuggingFace all-MiniLM-L12-v2 model
-                metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region="us-east-1"),
-            )
-
-        index = pc.Index(index_name)
-        return pc  # Return the Pinecone client
-    
-    return await asyncio.to_thread(_create_pinecone_client)
 
 # Initialize pinecone connector as a coroutine that will be awaited when needed
 async def get_pinecone_connector():
