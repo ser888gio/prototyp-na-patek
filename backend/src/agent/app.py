@@ -325,110 +325,180 @@ async def upload_file(request: Request):
     
     form = await request.form()
     print("Form keys:", form.keys())
-    file_upload = form.get("file_upload")
-
+    
+    # Collect all files from the form (supporting both single and multiple file uploads)
+    uploaded_files = []
+    
+    # Check for single file upload (backward compatibility)
+    single_file = form.get("file_upload")
+    if single_file and hasattr(single_file, 'filename') and single_file.filename:
+        uploaded_files.append(single_file)
+    
+    # Check for multiple file uploads (file_upload_0, file_upload_1, etc.)
+    for key in form.keys():
+        if key.startswith("file_upload_") and key != "file_upload":
+            file = form.get(key)
+            if file and hasattr(file, 'filename') and file.filename:
+                uploaded_files.append(file)
+    
     print(f"========== UPLOAD DEBUG START ==========")
     print(f"Received file upload request")
-    print(f"File name: {file_upload.filename}")
-    print(f"Content type: {file_upload.content_type}")
-    print(f"File size: {file_upload.size if hasattr(file_upload, 'size') else 'Unknown'}")
+    print(f"Number of files: {len(uploaded_files)}")
     
-    try: 
-        if not file_upload or not file_upload.filename:
-            print("ERROR: No file received")
-            return{
-                "status": "error",
-                "message": "No file received"
-            }
-    
-        print(f"Step 1: Reading file content...")
-        # Read the file content
-        file_content = await file_upload.read()
-        
-        # Save to temporary file for inspection
-        import tempfile
-        import os
-        temp_file_path = None
-        try:
-            # Use asyncio.to_thread for file operations to avoid blocking
-            def create_temp_file(content):
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                    temp_file.write(content)
-                    return temp_file.name
-            
-            temp_file_path = await asyncio.to_thread(create_temp_file, file_content)
-            print(f"Temporary file saved at: {temp_file_path}")
-            
-            print(f"Step 2: Initializing vector store...")
-            if vector_store is None:
-                await initialize_vector_store()
-                print("Vector store initialized successfully")
-            
-            print(f"Step 3: Calling load_pdf with temp file...")
-            # Load and process the PDF using the async function directly
-            pages = await load_pdf(temp_file_path)
-            print(f"load_pdf returned {len(pages) if pages else 0} pages")
-            
-            if pages:
-                print(f"First page preview (first 200 chars): {str(pages[0])[:200] if pages[0] else 'Empty'}")
-            
-            pages = [str(page) for page in pages if isinstance(page, str)]
-            full_text = "\n\n".join(pages)
-            print(f"Full text length: {len(full_text)} characters")
-
-            print(f"Step 4: Splitting text into chunks...")
-            # Call the async function directly since it already handles threading
-            chunks = await split_text_into_chunks(full_text)
-            print(f"Created {len(chunks)} chunks")
-            print(f"========== CHUNK ANALYSIS ==========")
-            for i, chunk in enumerate(chunks[:3]):  # Show first 3 chunks as examples
-                print(f"Chunk {i+1} (length: {len(chunk)} chars): {chunk[:200]}...")
-            if len(chunks) > 3:
-                print(f"... and {len(chunks) - 3} more chunks")
-            print(f"========== END CHUNK ANALYSIS ==========")
-
-            if vector_store and chunks:
-                print(f"Step 5: Adding chunks to vector store...")
-                print(f"Vector store type: {type(vector_store).__name__}")
-                print(f"Number of chunks to add: {len(chunks)}")
-                
-                # Wrap vector store operations in asyncio.to_thread
-                await asyncio.to_thread(vector_store.add_texts, chunks)
-                print(f"✅ Successfully added {len(chunks)} chunks to vector store")
-                print(f"Each chunk will be embedded and stored for future retrieval")
-            else:
-                if not vector_store:
-                    print(f"❌ Vector store not available - chunks not added")
-                if not chunks:
-                    print(f"❌ No chunks created - nothing to add to vector store")
-
-            print("========== UPLOAD SUCCESS ==========")
-            return {
-                "filename": file_upload.filename,
-                "status": "success",
-                "pages_processed": len(pages),
-                "chunks_created": len(chunks),
-                "message": f"PDF processed and {len(chunks)} chunks added to vector store"
-            }
-            
-        finally:
-            # Clean up temporary file using async thread wrapper
-            if temp_file_path:
-                await asyncio.to_thread(lambda: os.path.exists(temp_file_path) and os.unlink(temp_file_path))
-                print(f"Cleaned up temporary file: {temp_file_path}")
-                
-    except Exception as e:
-        print(f"========== UPLOAD ERROR ==========")
-        print(f"Error type: {type(e).__name__}")
-        print(f"Error message: {str(e)}")
-        import traceback
-        print(f"Full traceback:")
-        traceback.print_exc()
-        print(f"========== ERROR END ==========")
-        
+    if not uploaded_files:
+        print("ERROR: No files received")
         return {
-            "filename": file_upload.filename if file_upload else "unknown",
             "status": "error",
-            "message": f"Error processing file: {str(e)}"
+            "message": "No files received"
+        }
+    
+    # Process each file
+    results = []
+    total_chunks = 0
+    total_pages = 0
+    errors = []
+    
+    for i, file_upload in enumerate(uploaded_files):
+        print(f"\n--- Processing file {i+1}/{len(uploaded_files)}: {file_upload.filename} ---")
+        print(f"Content type: {file_upload.content_type}")
+        print(f"File size: {file_upload.size if hasattr(file_upload, 'size') else 'Unknown'}")
+        
+        try:
+            print(f"Step 1: Reading file content...")
+            # Read the file content
+            file_content = await file_upload.read()
+            
+            # Save to temporary file for inspection
+            import tempfile
+            import os
+            temp_file_path = None
+            try:
+                # Use asyncio.to_thread for file operations to avoid blocking
+                def create_temp_file(content):
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+                        temp_file.write(content)
+                        return temp_file.name
+                
+                temp_file_path = await asyncio.to_thread(create_temp_file, file_content)
+                print(f"Temporary file saved at: {temp_file_path}")
+                
+                print(f"Step 2: Initializing vector store...")
+                if vector_store is None:
+                    await initialize_vector_store()
+                    print("Vector store initialized successfully")
+                
+                print(f"Step 3: Calling load_pdf with temp file...")
+                # Load and process the PDF using the async function directly
+                pages = await load_pdf(temp_file_path)
+                print(f"load_pdf returned {len(pages) if pages else 0} pages")
+                
+                if pages:
+                    print(f"First page preview (first 200 chars): {str(pages[0])[:200] if pages[0] else 'Empty'}")
+                
+                pages = [str(page) for page in pages if isinstance(page, str)]
+                full_text = "\n\n".join(pages)
+                print(f"Full text length: {len(full_text)} characters")
+
+                print(f"Step 4: Splitting text into chunks...")
+                # Call the async function directly since it already handles threading
+                chunks = await split_text_into_chunks(full_text)
+                print(f"Created {len(chunks)} chunks")
+                print(f"========== CHUNK ANALYSIS ==========")
+                for j, chunk in enumerate(chunks[:3]):  # Show first 3 chunks as examples
+                    print(f"Chunk {j+1} (length: {len(chunk)} chars): {chunk[:200]}...")
+                if len(chunks) > 3:
+                    print(f"... and {len(chunks) - 3} more chunks")
+                print(f"========== END CHUNK ANALYSIS ==========")
+
+                if vector_store and chunks:
+                    print(f"Step 5: Adding chunks to vector store...")
+                    print(f"Vector store type: {type(vector_store).__name__}")
+                    print(f"Number of chunks to add: {len(chunks)}")
+                    
+                    # Wrap vector store operations in asyncio.to_thread
+                    await asyncio.to_thread(vector_store.add_texts, chunks)
+                    print(f"✅ Successfully added {len(chunks)} chunks to vector store")
+                    print(f"Each chunk will be embedded and stored for future retrieval")
+                else:
+                    if not vector_store:
+                        print(f"❌ Vector store not available - chunks not added")
+                    if not chunks:
+                        print(f"❌ No chunks created - nothing to add to vector store")
+
+                # Add to results
+                results.append({
+                    "filename": file_upload.filename,
+                    "status": "success",
+                    "pages_processed": len(pages),
+                    "chunks_created": len(chunks)
+                })
+                
+                total_pages += len(pages)
+                total_chunks += len(chunks)
+                
+            finally:
+                # Clean up temporary file using async thread wrapper
+                if temp_file_path:
+                    await asyncio.to_thread(lambda: os.path.exists(temp_file_path) and os.unlink(temp_file_path))
+                    print(f"Cleaned up temporary file: {temp_file_path}")
+                    
+        except Exception as e:
+            print(f"========== UPLOAD ERROR FOR {file_upload.filename} ==========")
+            print(f"Error type: {type(e).__name__}")
+            print(f"Error message: {str(e)}")
+            import traceback
+            print(f"Full traceback:")
+            traceback.print_exc()
+            print(f"========== ERROR END ==========")
+            
+            error_msg = f"Error processing {file_upload.filename}: {str(e)}"
+            errors.append(error_msg)
+            results.append({
+                "filename": file_upload.filename,
+                "status": "error",
+                "message": str(e)
+            })
+
+    print("========== UPLOAD SUMMARY ==========")
+    successful_files = [r for r in results if r["status"] == "success"]
+    failed_files = [r for r in results if r["status"] == "error"]
+    
+    print(f"Total files processed: {len(uploaded_files)}")
+    print(f"Successful: {len(successful_files)}")
+    print(f"Failed: {len(failed_files)}")
+    print(f"Total pages: {total_pages}")
+    print(f"Total chunks: {total_chunks}")
+    
+    # Return comprehensive response
+    if len(successful_files) == len(uploaded_files):
+        # All files successful
+        return {
+            "status": "success",
+            "message": f"Successfully processed {len(uploaded_files)} file(s)",
+            "files_processed": len(uploaded_files),
+            "total_pages": total_pages,
+            "total_chunks": total_chunks,
+            "results": results
+        }
+    elif len(successful_files) > 0:
+        # Partial success
+        return {
+            "status": "partial_success",
+            "message": f"Processed {len(successful_files)} out of {len(uploaded_files)} files successfully",
+            "files_processed": len(successful_files),
+            "files_failed": len(failed_files),
+            "total_pages": total_pages,
+            "total_chunks": total_chunks,
+            "results": results,
+            "errors": errors
+        }
+    else:
+        # All files failed
+        return {
+            "status": "error",
+            "message": f"Failed to process all {len(uploaded_files)} file(s)",
+            "files_failed": len(failed_files),
+            "results": results,
+            "errors": errors
         }
 

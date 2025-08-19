@@ -13,27 +13,36 @@ interface UploadResponse {
 }
 
 export default function FileUploader() {
-  const [file_upload, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [status, setStatus] = useState<UploadStatus>("idle");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadResult, setUploadResult] = useState<UploadResponse | null>(null);
 
   function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     if (e.target.files) {
-      setFile(e.target.files[0]);
+      const selectedFiles = Array.from(e.target.files);
+      setFiles(selectedFiles);
     }
   }
 
+  function removeFile(index: number) {
+    setFiles(files.filter((_, i) => i !== index));
+  }
+
   async function handleFileUpload() {
-    if (!file_upload) {
-      console.log("No file selected, returning");
+    if (!files || files.length === 0) {
+      console.log("No files selected, returning");
       return;
     }
     setStatus("uploading");
     setUploadProgress(0);
 
     const formData = new FormData();
-    formData.append("file_upload", file_upload);
+    
+    // Append all files to FormData
+    files.forEach((file, index) => {
+      formData.append(`file_upload_${index}`, file);
+    });
 
     try {
       //Dává se post na backend, kde běž aplikace s endpointem upload
@@ -88,6 +97,7 @@ export default function FileUploader() {
         onChange={handleFileChange}
         className="hidden"
         id="file-upload"
+        multiple
       />
 
       {/* Upload button styled like the image */}
@@ -99,11 +109,25 @@ export default function FileUploader() {
         <span className="font-medium">Upload</span>
       </label>
 
-      {file_upload && (
-        <div className="mb-4 text-sm">
-          <p>File name: {file_upload.name}</p>
-          <p>Size: {(file_upload.size / 384).toFixed(2)} KB</p>
-          <p>Type: {file_upload.type}</p>
+      {files.length > 0 && (
+        <div className="mb-4 space-y-2">
+          <h3 className="font-medium text-sm">Selected Files:</h3>
+          {files.map((file, index) => (
+            <div key={index} className="text-sm border rounded p-2 flex justify-between items-start">
+              <div>
+                <p>File name: {file.name}</p>
+                <p>Size: {(file.size / 1024).toFixed(2)} KB</p>
+                <p>Type: {file.type}</p>
+              </div>
+              <button
+                onClick={() => removeFile(index)}
+                className="text-red-500 hover:text-red-700 text-lg"
+                title="Remove file"
+              >
+                ×
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -119,12 +143,12 @@ export default function FileUploader() {
         </div>
       )}
 
-      {file_upload && status !== "uploading" && (
+      {files.length > 0 && status !== "uploading" && (
         <button
           onClick={handleFileUpload}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
-          Start Upload
+          Start Upload ({files.length} file{files.length !== 1 ? 's' : ''})
         </button>
       )}
 
