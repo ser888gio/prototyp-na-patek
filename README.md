@@ -12,8 +12,9 @@ This project demonstrates a fullstack application using a React frontend and a L
 - 🌐 Integrated web research via Google Search API.
 - 🤔 Reflective reasoning to identify knowledge gaps and refine searches.
 - 📄 Generates answers with citations from gathered sources.
-- � **Multi-format document support**: Upload and process PDFs, Word docs, PowerPoint, Excel, and text files.
-- �🔄 Hot-reloading for both frontend and backend during development.
+- 📄 **Multi-format document support**: Upload and process PDFs, Word docs, PowerPoint, Excel, and text files.
+- 🎯 **Advanced Re-ranking**: Improves document relevance using cross-encoder models for better retrieval results.
+- 🔄 Hot-reloading for both frontend and backend during development.
 
 ## Project Structure
 

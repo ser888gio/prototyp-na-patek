@@ -24,6 +24,7 @@ dependencies = [
     "openpyxl>=3.0.0",  # For Excel files
     "python-pptx>=0.6.0",  # For PowerPoint files (alternative)
     "pandas>=2.0.0",  # For CSV and Excel processing
+    "sentence-transformers>=2.2.0",  # For embeddings and re-ranking
 ]
 
 

@@ -37,6 +37,9 @@ from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 from pinecone import Pinecone, ServerlessSpec
 
+# Import re-ranking functionality
+from agent.reranker import get_reranker
+
 load_dotenv()
 
 if os.getenv("GEMINI_API_KEY") is None:
@@ -94,15 +97,15 @@ async def initialize_rag_system():
         )
         print(f"✅ Vector store created: {type(vector_store).__name__}")
         
-        # Create retriever
+        # Create retriever with higher k for initial retrieval (before re-ranking)
         retriever = vector_store.as_retriever(
             search_type="similarity_score_threshold",
-            search_kwargs={"k": 3, "score_threshold": 0.4},
+            search_kwargs={"k": 10, "score_threshold": 0.3},  # Get more docs with lower threshold for re-ranking
         )
         print(f"✅ Retriever created with config:")
         print(f"   - search_type: similarity_score_threshold")
-        print(f"   - k (max results): 3")
-        print(f"   - score_threshold: 0.4")
+        print(f"   - k (max results): 10 (for initial retrieval before re-ranking)")
+        print(f"   - score_threshold: 0.3 (lowered for broader initial retrieval)")
         print(f"========== RAG SYSTEM INITIALIZATION COMPLETE (GRAPH) ==========\n")
         
         return True
@@ -173,7 +176,7 @@ async def rag_search(state: OverallState, config: RunnableConfig) -> OverallStat
     """LangGraph node that performs RAG search using the vector database.
     
     This node searches the vector database for relevant documents and adds them
-    to the research results.
+    to the research results. Includes optional re-ranking for improved relevance.
     
     Args:
         state: Current graph state containing the user's question
@@ -183,6 +186,9 @@ async def rag_search(state: OverallState, config: RunnableConfig) -> OverallStat
         Dictionary with state update, including rag_results and sources_gathered
     """
     global vector_store, retriever
+    
+    # Get configuration
+    configurable = Configuration.from_runnable_config(config)
     
     try:
         # Initialize RAG system if not already done
@@ -198,6 +204,10 @@ async def rag_search(state: OverallState, config: RunnableConfig) -> OverallStat
         research_topic = get_research_topic(state["messages"])
         print(f"========== RAG SEARCH IN GRAPH ==========")
         print(f"Research topic extracted: '{research_topic}'")
+        print(f"Re-ranking enabled: {configurable.enable_reranking}")
+        if configurable.enable_reranking:
+            print(f"Re-ranking strategy: {configurable.reranking_strategy}")
+            print(f"Re-ranking top-k: {configurable.reranking_top_k}")
         
         # Perform RAG search
         print(f"Invoking retriever with topic: '{research_topic}'")
@@ -206,37 +216,70 @@ async def rag_search(state: OverallState, config: RunnableConfig) -> OverallStat
         print(f"========== VECTOR STORE EXTRACTION (GRAPH) ==========")
         print(f"Query/Topic: '{research_topic}'")
         print(f"Found {len(relevant_docs)} documents from vector store")
-        print(f"Retriever config: search_type=similarity_score_threshold, k=3, score_threshold=0.4")
+        print(f"Retriever config: search_type=similarity_score_threshold, k=10, score_threshold=0.3")
         
-        # Format RAG results
+        # Apply re-ranking if enabled
+        if configurable.enable_reranking and relevant_docs:
+            print(f"========== APPLYING RE-RANKING ==========")
+            reranker = await get_reranker(configurable.reranking_strategy)
+            reranked_results = await reranker.rerank_documents(
+                query=research_topic,
+                documents=relevant_docs,
+                top_k=configurable.reranking_top_k
+            )
+            print(f"Re-ranking complete. Using top {len(reranked_results)} documents.")
+            documents_to_use = reranked_results
+        else:
+            # Use original documents without re-ranking
+            documents_to_use = [(doc, getattr(doc, 'score', 0.5)) for doc in relevant_docs]
+            if not configurable.enable_reranking:
+                print(f"Re-ranking disabled. Using original retrieval order.")
+        
+        # Format RAG results using selected documents
         rag_results = []
         rag_sources = []
         
-        for i, doc in enumerate(relevant_docs):
-            print(f"\n--- RAG Document {i+1} (Graph Node) ---")
+        for i, (doc, relevance_score) in enumerate(documents_to_use):
+            print(f"\n--- {'Re-ranked ' if configurable.enable_reranking else ''}RAG Document {i+1} (Graph Node) ---")
             print(f"Content length: {len(doc.page_content)} characters")
             print(f"Metadata: {doc.metadata}")
-            score = getattr(doc, 'score', None)
-            if score is not None:
-                print(f"Similarity score: {score}")
+            
+            if configurable.enable_reranking:
+                print(f"Re-ranking relevance score: {relevance_score:.4f}")
+            
+            # Preserve original similarity score if available
+            original_score = getattr(doc, 'score', None)
+            if original_score is not None:
+                print(f"Original similarity score: {original_score}")
+            
             print(f"Content preview (first 300 chars): {doc.page_content[:300]}...")
             if len(doc.page_content) > 300:
                 print(f"Content preview (last 100 chars): ...{doc.page_content[-100:]}")
             
-            # Create a formatted result
-            result_text = f"Document {i+1} (from vector database):\n{doc.page_content}"
+            # Create a formatted result with relevance information
+            score_info = f", relevance: {relevance_score:.4f}" if configurable.enable_reranking else ""
+            result_text = f"Document {i+1} (from vector database{score_info}):\n{doc.page_content}"
             rag_results.append(result_text)
             
-            # Add to sources (format similar to web sources)
-            rag_sources.append({
+            # Add to sources with relevance score
+            source_value = f"Vector Database Document {i+1}"
+            if configurable.enable_reranking:
+                source_value += f" (relevance: {relevance_score:.3f})"
+            
+            source_entry = {
                 "label": f"rag_doc_{i}",
                 "short_url": f"rag://doc_{i}",
-                "value": f"Vector Database Document {i+1}",
+                "value": source_value,
                 "type": "rag"
-            })
+            }
+            
+            if configurable.enable_reranking:
+                source_entry["relevance_score"] = relevance_score
+            
+            rag_sources.append(source_entry)
             
             print(f"Added to rag_results: First 200 chars of formatted result: {result_text[:200]}...")
-            print(f"Added to sources: {rag_sources[-1]}")
+            print(f"Added to sources: {source_entry}")
         
         print(f"========== END RAG EXTRACTION (GRAPH) ==========\n")
         

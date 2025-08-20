@@ -10,6 +10,7 @@ from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 
 from agent.pinecone_connector import pinecone_connector_start
+from agent.reranker import get_reranker
 from dotenv import load_dotenv
 import asyncio
 
@@ -216,15 +217,15 @@ async def initialize_vector_store():
     )
     print(f"✅ Vector store created: {type(vector_store).__name__}")
     
-    # Create retriever
+    # Create retriever with higher k for initial retrieval (before re-ranking)
     retriever = vector_store.as_retriever(
         search_type="similarity_score_threshold",
-        search_kwargs={"k": 5, "score_threshold": 0.4},
+        search_kwargs={"k": 10, "score_threshold": 0.3},  # Get more docs with lower threshold for re-ranking
     )
     print(f"✅ Retriever created with config:")
     print(f"   - search_type: similarity_score_threshold")
-    print(f"   - k (max results): 3")
-    print(f"   - score_threshold: 0.4")
+    print(f"   - k (max results): 10 (for initial retrieval before re-ranking)")
+    print(f"   - score_threshold: 0.3 (lowered for broader initial retrieval)")
     print(f"========== VECTOR STORE INITIALIZATION COMPLETE ==========\n")
     
     return vector_store
@@ -272,17 +273,32 @@ async def query_documents(request: Request):
         print(f"========== VECTOR STORE RETRIEVAL RESULTS ==========")
         print(f"Query: '{query_text}'")
         print(f"Found {len(relevant_docs)} relevant documents")
-        print(f"Retriever config: search_type=similarity_score_threshold, k=3, score_threshold=0.4")
+        print(f"Retriever config: search_type=similarity_score_threshold, k=10, score_threshold=0.3")
         
-        # Format the results and print detailed information
+        # Apply re-ranking to improve relevance
+        print(f"========== APPLYING RE-RANKING ==========")
+        reranker = await get_reranker("hybrid")  # Use hybrid re-ranker
+        reranked_results = await reranker.rerank_documents(
+            query=query_text,
+            documents=relevant_docs,
+            top_k=5  # Keep top 5 after re-ranking for API endpoint
+        )
+        
+        print(f"Re-ranking complete. Final results: {len(reranked_results)} documents")
+        
+        # Format the results and print detailed information using re-ranked documents
         results = []
-        for i, doc in enumerate(relevant_docs):
-            print(f"\n--- Document {i+1} ---")
+        for i, (doc, relevance_score) in enumerate(reranked_results):
+            print(f"\n--- Re-ranked Document {i+1} ---")
             print(f"Content length: {len(doc.page_content)} characters")
             print(f"Metadata: {doc.metadata}")
-            score = getattr(doc, 'score', None)
-            if score is not None:
-                print(f"Similarity score: {score}")
+            print(f"Re-ranking relevance score: {relevance_score:.4f}")
+            
+            # Preserve original similarity score if available
+            original_score = getattr(doc, 'score', None)
+            if original_score is not None:
+                print(f"Original similarity score: {original_score}")
+                
             print(f"Content preview (first 300 chars): {doc.page_content[:300]}...")
             if len(doc.page_content) > 300:
                 print(f"Content preview (last 100 chars): ...{doc.page_content[-100:]}")
@@ -291,7 +307,8 @@ async def query_documents(request: Request):
                 "id": i,
                 "content": doc.page_content,
                 "metadata": doc.metadata,
-                "score": score
+                "original_score": original_score,
+                "relevance_score": relevance_score
             })
         
         print(f"========== END RETRIEVAL RESULTS ==========\n")
