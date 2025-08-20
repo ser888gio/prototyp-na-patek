@@ -12,6 +12,42 @@ interface UploadResponse {
   file_size: number;
 }
 
+// Helper function to get file type from extension
+function getFileType(filename: string): string {
+  const extension = filename.toLowerCase().split(".").pop() || "";
+
+  if (["pdf"].includes(extension)) return "PDF";
+  if (["docx", "doc"].includes(extension)) return "Word";
+  if (["pptx", "ppt"].includes(extension)) return "PowerPoint";
+  if (["xlsx", "xls"].includes(extension)) return "Excel";
+  if (
+    ["txt", "md", "csv", "json", "xml", "html", "htm", "log"].includes(
+      extension
+    )
+  )
+    return "Text";
+
+  return "Unknown";
+}
+
+// Helper function to get file type color
+function getFileTypeColor(fileType: string): string {
+  switch (fileType) {
+    case "PDF":
+      return "bg-red-100 text-red-800";
+    case "Word":
+      return "bg-blue-100 text-blue-800";
+    case "PowerPoint":
+      return "bg-orange-100 text-orange-800";
+    case "Excel":
+      return "bg-green-100 text-green-800";
+    case "Text":
+      return "bg-gray-100 text-gray-800";
+    default:
+      return "bg-gray-100 text-gray-800";
+  }
+}
+
 export default function FileUploader() {
   const [files, setFiles] = useState<File[]>([]);
   const [status, setStatus] = useState<UploadStatus>("idle");
@@ -38,10 +74,10 @@ export default function FileUploader() {
     setUploadProgress(0);
 
     const formData = new FormData();
-    
-    // Append all files to FormData
-    files.forEach((file, index) => {
-      formData.append(`file_upload_${index}`, file);
+
+    // Append all files to FormData with the correct field name for FastAPI
+    files.forEach((file) => {
+      formData.append("files", file);
     });
 
     try {
@@ -98,6 +134,7 @@ export default function FileUploader() {
         className="hidden"
         id="file-upload"
         multiple
+        accept=".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.txt,.md,.csv,.json,.xml,.html,.htm,.log"
       />
 
       {/* Upload button styled like the image */}
@@ -109,25 +146,64 @@ export default function FileUploader() {
         <span className="font-medium">Upload</span>
       </label>
 
+      {/* Supported file types information */}
+      <div className="text-xs text-gray-600 mt-2">
+        <p className="font-medium mb-1">Supported file types:</p>
+        <div className="flex flex-wrap gap-1">
+          <span className="px-2 py-1 bg-gray-100 rounded text-xs">PDF</span>
+          <span className="px-2 py-1 bg-gray-100 rounded text-xs">
+            Word (.docx, .doc)
+          </span>
+          <span className="px-2 py-1 bg-gray-100 rounded text-xs">
+            PowerPoint (.pptx, .ppt)
+          </span>
+          <span className="px-2 py-1 bg-gray-100 rounded text-xs">
+            Excel (.xlsx, .xls)
+          </span>
+          <span className="px-2 py-1 bg-gray-100 rounded text-xs">
+            Text (.txt, .md, .csv)
+          </span>
+        </div>
+      </div>
+
       {files.length > 0 && (
         <div className="mb-4 space-y-2">
           <h3 className="font-medium text-sm">Selected Files:</h3>
-          {files.map((file, index) => (
-            <div key={index} className="text-sm border rounded p-2 flex justify-between items-start">
-              <div>
-                <p>File name: {file.name}</p>
-                <p>Size: {(file.size / 1024).toFixed(2)} KB</p>
-                <p>Type: {file.type}</p>
-              </div>
-              <button
-                onClick={() => removeFile(index)}
-                className="text-red-500 hover:text-red-700 text-lg"
-                title="Remove file"
+          {files.map((file, index) => {
+            const fileType = getFileType(file.name);
+            const colorClass = getFileTypeColor(fileType);
+
+            return (
+              <div
+                key={index}
+                className="text-sm border rounded p-2 flex justify-between items-start"
               >
-                ×
-              </button>
-            </div>
-          ))}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="font-medium">{file.name}</p>
+                    <span
+                      className={`px-2 py-1 rounded text-xs font-medium ${colorClass}`}
+                    >
+                      {fileType}
+                    </span>
+                  </div>
+                  <p className="text-gray-600">
+                    Size: {(file.size / 1024).toFixed(2)} KB
+                  </p>
+                  {file.type && (
+                    <p className="text-gray-600">MIME: {file.type}</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => removeFile(index)}
+                  className="text-red-500 hover:text-red-700 text-lg ml-2"
+                  title="Remove file"
+                >
+                  ×
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -148,7 +224,7 @@ export default function FileUploader() {
           onClick={handleFileUpload}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
-          Start Upload ({files.length} file{files.length !== 1 ? 's' : ''})
+          Start Upload ({files.length} file{files.length !== 1 ? "s" : ""})
         </button>
       )}
 

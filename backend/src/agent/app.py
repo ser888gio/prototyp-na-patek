@@ -1,10 +1,10 @@
 # mypy: disable - error - code = "no-untyped-def,misc"
 import pathlib
-from fastapi import FastAPI, Response, Request
+from fastapi import FastAPI, Response, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from agent.pdfloader import load_pdf
+from agent.document_loader import load_document
 from agent.text_splitter import split_text_into_chunks
 from langchain_pinecone import PineconeVectorStore
 from langchain_huggingface.embeddings import HuggingFaceEmbeddings
@@ -321,65 +321,103 @@ async def query_documents(request: Request):
 
 @app.post("/uploadfile/")
 async def upload_file(request: Request):
+    """
+    Upload and process multiple document files.
+    Supports: PDF, Word, PowerPoint, Excel, and text files.
+    
+    This endpoint handles both FastAPI UploadFile format and multipart form data
+    to avoid blocking operations while maintaining compatibility.
+    """
     global vector_store
-    
-    form = await request.form()
-    print("Form keys:", form.keys())
-    
-    # Collect all files from the form (supporting both single and multiple file uploads)
-    uploaded_files = []
-    
-    # Check for single file upload (backward compatibility)
-    single_file = form.get("file_upload")
-    if single_file and hasattr(single_file, 'filename') and single_file.filename:
-        uploaded_files.append(single_file)
-    
-    # Check for multiple file uploads (file_upload_0, file_upload_1, etc.)
-    for key in form.keys():
-        if key.startswith("file_upload_") and key != "file_upload":
-            file = form.get(key)
-            if file and hasattr(file, 'filename') and file.filename:
-                uploaded_files.append(file)
     
     print(f"========== UPLOAD DEBUG START ==========")
     print(f"Received file upload request")
-    print(f"Number of files: {len(uploaded_files)}")
     
-    if not uploaded_files:
-        print("ERROR: No files received")
-        return {
-            "status": "error",
-            "message": "No files received"
-        }
-    
-    # Process each file
-    results = []
-    total_chunks = 0
-    total_pages = 0
-    errors = []
-    
-    for i, file_upload in enumerate(uploaded_files):
-        print(f"\n--- Processing file {i+1}/{len(uploaded_files)}: {file_upload.filename} ---")
-        print(f"Content type: {file_upload.content_type}")
-        print(f"File size: {file_upload.size if hasattr(file_upload, 'size') else 'Unknown'}")
+    try:
+        # Try to get files from multipart form without causing blocking operations
+        form = await request.form()
+        print("Form keys:", list(form.keys()))
         
-        try:
-            print(f"Step 1: Reading file content...")
-            # Read the file content
-            file_content = await file_upload.read()
+        # Collect all files from the form
+        uploaded_files = []
+        
+        # Method 1: Check for FastAPI UploadFile format (files)
+        if 'files' in form:
+            files_data = form.getlist('files')
+            for file_data in files_data:
+                if hasattr(file_data, 'filename') and file_data.filename:
+                    uploaded_files.append(file_data)
+        
+        # Method 2: Check for old format (file_upload, file_upload_0, etc.)
+        if not uploaded_files:
+            # Check for single file upload (backward compatibility)
+            single_file = form.get("file_upload")
+            if single_file and hasattr(single_file, 'filename') and single_file.filename:
+                uploaded_files.append(single_file)
             
-            # Save to temporary file for inspection
-            import tempfile
-            import os
-            temp_file_path = None
+            # Check for multiple file uploads (file_upload_0, file_upload_1, etc.)
+            for key in form.keys():
+                if key.startswith("file_upload_") and key != "file_upload":
+                    file = form.get(key)
+                    if file and hasattr(file, 'filename') and file.filename:
+                        uploaded_files.append(file)
+        
+        print(f"Number of files: {len(uploaded_files)}")
+        
+        if not uploaded_files:
+            print("ERROR: No files received")
+            return {
+                "status": "error",
+                "message": "No files received"
+            }
+        
+        # Process each file
+        results = []
+        total_chunks = 0
+        total_pages = 0
+        errors = []
+        
+        for i, file_upload in enumerate(uploaded_files):
+            print(f"\n--- Processing file {i+1}/{len(uploaded_files)}: {file_upload.filename} ---")
+            print(f"Content type: {file_upload.content_type}")
+            print(f"File size: {file_upload.size if hasattr(file_upload, 'size') else 'Unknown'}")
+            
             try:
-                # Use asyncio.to_thread for file operations to avoid blocking
-                def create_temp_file(content):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
-                        temp_file.write(content)
-                        return temp_file.name
+                print(f"Step 1: Reading file content...")
+                # Read the file content
+                file_content = await file_upload.read()
                 
-                temp_file_path = await asyncio.to_thread(create_temp_file, file_content)
+                # Save to temporary file for inspection  
+                import tempfile
+                import os
+                from pathlib import Path
+                temp_file_path = None
+                try:
+                    # Use asyncio.to_thread for file operations to avoid blocking
+                    async def create_temp_file_async(content, original_filename):
+                        # Get the original file extension to preserve file type
+                        original_extension = Path(original_filename).suffix if original_filename else '.txt'
+                        
+                        def _create_temp():
+                            # Use a known temp directory to avoid getcwd() calls
+                            import platform
+                            if platform.system() == "Windows":
+                                temp_dir = os.environ.get('TEMP', os.environ.get('TMP', 'C:\\temp'))
+                            else:
+                                temp_dir = '/tmp'
+                            
+                            # Ensure temp directory exists
+                            os.makedirs(temp_dir, exist_ok=True)
+                            
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=original_extension, dir=temp_dir) as temp_file:
+                                temp_file.write(content)
+                                return temp_file.name
+                        
+                        return await asyncio.to_thread(_create_temp)
+                    
+                    temp_file_path = await create_temp_file_async(file_content, file_upload.filename)
+                except Exception as e:
+                    return e
                 print(f"Temporary file saved at: {temp_file_path}")
                 
                 print(f"Step 2: Initializing vector store...")
@@ -387,10 +425,10 @@ async def upload_file(request: Request):
                     await initialize_vector_store()
                     print("Vector store initialized successfully")
                 
-                print(f"Step 3: Calling load_pdf with temp file...")
-                # Load and process the PDF using the async function directly
-                pages = await load_pdf(temp_file_path)
-                print(f"load_pdf returned {len(pages) if pages else 0} pages")
+                print(f"Step 3: Calling load_document with temp file...")
+                # Load and process the document using the async function directly
+                pages = await load_document(temp_file_path)
+                print(f"load_document returned {len(pages) if pages else 0} pages")
                 
                 if pages:
                     print(f"First page preview (first 200 chars): {str(pages[0])[:200] if pages[0] else 'Empty'}")
@@ -442,7 +480,6 @@ async def upload_file(request: Request):
                     await asyncio.to_thread(lambda: os.path.exists(temp_file_path) and os.unlink(temp_file_path))
                     print(f"Cleaned up temporary file: {temp_file_path}")
                     
-        except Exception as e:
             print(f"========== UPLOAD ERROR FOR {file_upload.filename} ==========")
             print(f"Error type: {type(e).__name__}")
             print(f"Error message: {str(e)}")
@@ -458,6 +495,8 @@ async def upload_file(request: Request):
                 "status": "error",
                 "message": str(e)
             })
+    except Exception as e:
+        return e
 
     print("========== UPLOAD SUMMARY ==========")
     successful_files = [r for r in results if r["status"] == "success"]
