@@ -12,7 +12,7 @@ from pathlib import Path
 # Add the src directory to Python path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from agent.document_loader import load_document, DocumentLoader
+from document_loader import load_document, DocumentLoader
 
 
 async def test_document_loader():
