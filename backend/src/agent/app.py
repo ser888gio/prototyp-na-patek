@@ -1,5 +1,6 @@
 # mypy: disable - error - code = "no-untyped-def,misc"
 import pathlib
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response, Request, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,8 @@ from langchain_huggingface.embeddings import HuggingFaceEmbeddings
 
 from agent.pinecone_connector import pinecone_connector_start
 from agent.reranker import get_reranker
+from agent.chat_history_api import chat_history_router
+from agent.database import create_tables
 from dotenv import load_dotenv
 import asyncio
 
@@ -20,8 +23,24 @@ load_dotenv()
 async def get_pinecone_connector():
     return await pinecone_connector_start()
 
-# Define the FastAPI app
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database on startup"""
+    try:
+        create_tables()
+        print("✅ Chat history database tables initialized")
+    except Exception as e:
+        print(f"❌ Failed to initialize chat history database: {e}")
+    
+    yield
+    
+    # Cleanup on shutdown if needed
+    print("🔄 Application shutting down...")
+
+
+# Define the FastAPI app with lifespan
+app = FastAPI(lifespan=lifespan)
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -70,6 +89,9 @@ app.mount(
     create_frontend_router(),
     name="frontend",
 )
+
+# Include chat history router
+app.include_router(chat_history_router)
 
 @app.get("/")
 def read_root():

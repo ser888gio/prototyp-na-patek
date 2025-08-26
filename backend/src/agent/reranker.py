@@ -6,9 +6,8 @@ of retrieved documents after initial vector similarity search.
 
 import asyncio
 import logging
-from typing import List, Tuple, Dict, Any, Optional
+from typing import List, Tuple, Any, Optional
 from sentence_transformers import CrossEncoder
-import numpy as np
 from langchain_core.documents import Document
 
 logger = logging.getLogger(__name__)

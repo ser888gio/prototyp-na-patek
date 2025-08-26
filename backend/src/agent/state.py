@@ -20,6 +20,10 @@ class OverallState(TypedDict):
     max_research_loops: int
     research_loop_count: int
     reasoning_model: str
+    # Enhanced conversation context
+    conversation_id: str
+    conversation_history: Annotated[list, operator.add]  # Previous conversation context
+    user_id: str
 
 
 class ReflectionState(TypedDict):
