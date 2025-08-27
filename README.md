@@ -115,6 +115,33 @@ Follow these steps to get the application running locally for development and te
    LANGSMITH_API_KEY="your_langsmith_key"  # Optional for monitoring
    ```
 
+   Setting up the API keys:
+   1) Google Gemini API Key (Google AI studio):
+   Go to this site: https://aistudio.google.com/app/apikey
+   Click on Create API key in the top-right corner
+   Pick a Google Cloud Project (https://developers.google.com/workspace/guides/create-project)
+   Copy the key to the env, created from env-example
+
+   2) Pinecone:
+   Cick on Create index in the top right corner
+   Name the index
+   Pick the multilingaul - e5 - large config
+   Pick cloud provider - aws (the only free)
+   Press create index
+   On the left panel, there is API keys section
+   Create API key in the top right corner
+   Name the name and copy it
+
+   PINECONE_ENVIRONMENT=used model
+   In indexes, under the index name on the right there is Model: name
+
+   3) Database URL (this is the DB to store chat history implemented in PostgreSQL)
+   template = postgresql://username:password@localhost:5432/database_name
+
+   4) Langsmith API key
+   On the left panel pick API keys
+   Click on the button in the top right corner
+
 ### Installation
 
 **Backend Dependencies:**
