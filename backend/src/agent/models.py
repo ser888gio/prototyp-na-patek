@@ -3,8 +3,7 @@ Chat History Models and Database Schema
 """
 
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from sqlalchemy import Column, String, DateTime, Text, Integer, ForeignKey, JSON, Boolean
+from sqlalchemy import Column, String, DateTime, Text, Integer, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship

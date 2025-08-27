@@ -6,11 +6,12 @@ Add these to your existing app.py file
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from agent.database import get_db
 from agent.chat_history_service import ChatHistoryService
 from agent.models import Conversation, Message
+import uuid
 
 # Create router for chat history endpoints
 chat_history_router = APIRouter(prefix="/api/chat-history", tags=["chat-history"])
@@ -31,6 +32,13 @@ class ConversationResponse(BaseModel):
     message_count: int
     summary: Optional[str] = None
     
+    @field_validator('id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+    
     class Config:
         from_attributes = True
 
@@ -47,6 +55,16 @@ class MessageResponse(BaseModel):
     extra_data: Optional[Dict[str, Any]]
     created_at: datetime
     sequence_number: int
+    
+    @field_validator('id', 'conversation_id', mode='before')
+    @classmethod
+    def convert_uuid_to_str(cls, v):
+        if isinstance(v, uuid.UUID):
+            return str(v)
+        return v
+    
+    class Config:
+        from_attributes = True
     
     class Config:
         from_attributes = True

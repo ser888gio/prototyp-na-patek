@@ -1,122 +1,437 @@
-# Gemini Fullstack LangGraph Quickstart
+# RAG Chatbot with LangGraph - Advanced Document Analysis & Research
 
-This project demonstrates a fullstack application using a React frontend and a LangGraph-powered backend agent. The agent is designed to perform comprehensive research on a user's query by dynamically generating search terms, querying the web using Google Search, reflecting on the results to identify knowledge gaps, and iteratively refining its search until it can provide a well-supported answer with citations. This application serves as an example of building research-augmented conversational AI using LangGraph and Google's Gemini models.
+This project is a comprehensive RAG (Retrieval-Augmented Generation) chatbot system built with a React frontend and a Python FastAPI backend powered by LangGraph. The system combines advanced document analysis, web research, and conversational AI to provide intelligent, context-aware responses. It leverages Google Gemini models for natural language processing and integrates multiple data sources including uploaded documents and real-time web search.
 
-<img src="./app.png" title="Gemini Fullstack LangGraph" alt="Gemini Fullstack LangGraph" width="90%">
+<img src="./app.png" title="RAG Chatbot with LangGraph" alt="RAG Chatbot with LangGraph" width="90%">
 
-## Features
+## 🌟 Key Capabilities
 
-- 💬 Fullstack application with a React frontend and LangGraph backend.
-- 🧠 Powered by a LangGraph agent for advanced research and conversational AI.
-- 🔍 Dynamic search query generation using Google Gemini models.
-- 🌐 Integrated web research via Google Search API.
-- 🤔 Reflective reasoning to identify knowledge gaps and refine searches.
-- 📄 Generates answers with citations from gathered sources.
-- 📄 **Multi-format document support**: Upload and process PDFs, Word docs, PowerPoint, Excel, and text files.
-- 🎯 **Advanced Re-ranking**: Improves document relevance using cross-encoder models for better retrieval results.
-- 🔄 Hot-reloading for both frontend and backend during development.
+- **🧠 Intelligent Document Processing**: Upload and analyze multiple document formats (PDF, Word, PowerPoint, Excel, text files)
+- **🔍 Hybrid Search**: Combines document retrieval with real-time web search for comprehensive answers
+- **💬 Advanced Chat Interface**: Persistent chat history with conversation management
+- **🎯 Smart Re-ranking**: Uses cross-encoder models to improve document relevance
+- **🤔 Reflective Reasoning**: Iteratively refines searches based on knowledge gap analysis
+- **📊 Real-time Processing**: Live updates on document processing and query execution
+- **🔄 Vector Database Integration**: Efficient semantic search using Pinecone vector store
 
-## Project Structure
+## ✨ Features
 
-The project is divided into two main directories:
+### Core Functionality
+- 💬 **Fullstack RAG Application**: React frontend with LangGraph-powered backend
+- 🧠 **Advanced Research Agent**: Multi-step reasoning and iterative query refinement
+- 🔍 **Dynamic Query Generation**: Smart search term generation using Google Gemini models
+- 🌐 **Integrated Web Research**: Real-time web search via Google Search API
+- 🤔 **Reflective Analysis**: Identifies knowledge gaps and refines search strategies
 
--   `frontend/`: Contains the React application built with Vite.
--   `backend/`: Contains the LangGraph/FastAPI application, including the research agent logic.
+### Document Management
+- 📄 **Multi-format Support**: PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), and text files
+- 📚 **Intelligent Processing**: Automatic text extraction, chunking, and embedding generation
+- 🎯 **Advanced Re-ranking**: Cross-encoder models for improved document relevance
+- 💾 **Vector Storage**: Efficient semantic search using Pinecone vector database
+- 📊 **Processing Status**: Real-time updates on document upload and processing
 
-## Getting Started: Development and Local Testing
+### Chat & History
+- 💬 **Persistent Conversations**: Chat history with session management
+- 🔄 **Conversation Management**: Create, view, and manage multiple chat sessions
+- 💾 **Local & Cloud Storage**: Conversations stored locally and optionally in PostgreSQL
+- 🔍 **Search History**: Find previous conversations and messages
+
+### Development Features
+- 🔄 **Hot-reloading**: Live updates for both frontend and backend during development
+- 🧪 **Comprehensive Testing**: Unit tests, integration tests, and manual testing interfaces
+- 📈 **Activity Timeline**: Real-time visualization of processing steps
+- 🛠️ **Development Tools**: Built-in health checks and vector store status endpoints
+
+## 🏗️ Project Structure
+
+```
+prototyp-na-patek/
+├── frontend/                    # React + TypeScript frontend
+│   ├── src/
+│   │   ├── components/         # UI components
+│   │   │   ├── ChatMessagesView.tsx
+│   │   │   ├── ConversationList.tsx
+│   │   │   ├── InputForm.tsx
+│   │   │   ├── UploadFile.tsx
+│   │   │   ├── ActivityTimeline.tsx
+│   │   │   └── ui/            # Shadcn UI components
+│   │   ├── hooks/             # Custom React hooks
+│   │   │   └── useChatHistory.ts
+│   │   ├── App.tsx            # Main application
+│   │   └── EnhancedApp.tsx    # Enhanced chat interface
+│   ├── package.json
+│   └── vite.config.ts
+├── backend/                     # Python FastAPI + LangGraph backend
+│   ├── src/agent/
+│   │   ├── app.py             # FastAPI application & API endpoints
+│   │   ├── graph.py           # LangGraph agent definition
+│   │   ├── document_loader.py # Multi-format document processing
+│   │   ├── rag.py             # RAG pipeline implementation
+│   │   ├── reranker.py        # Document re-ranking logic
+│   │   ├── pinecone_connector.py # Vector database integration
+│   │   ├── chat_history_api.py   # Chat history endpoints
+│   │   ├── embeddings.py      # Text embedding generation
+│   │   ├── prompts.py         # LLM prompts and templates
+│   │   └── utils.py           # Utility functions
+│   ├── tests/                 # Test files and manual testing interfaces
+│   ├── pyproject.toml         # Python dependencies
+│   └── langgraph.json         # LangGraph configuration
+├── docker-compose.yml          # Production deployment
+├── Dockerfile                  # Multi-stage Docker build
+├── README.md                   # This file
+├── SYSTEMOVA_DOKUMENTACE.md   # Detailed system documentation (Czech)
+└── CHAT_HISTORY_README.md     # Chat history implementation guide
+```
+
+## 🚀 Getting Started: Development and Local Testing
 
 Follow these steps to get the application running locally for development and testing.
 
-**1. Prerequisites:**
+### Prerequisites
 
--   Node.js and npm (or yarn/pnpm)
--   Python 3.11+
--   **`GEMINI_API_KEY`**: The backend agent requires a Google Gemini API key.
-    1.  Navigate to the `backend/` directory.
-    2.  Create a file named `.env` by copying the `backend/.env.example` file.
-    3.  Open the `.env` file and add your Gemini API key: `GEMINI_API_KEY="YOUR_ACTUAL_API_KEY"`
+- **Node.js 18+** and npm (or yarn/pnpm)
+- **Python 3.11+** with pip or uv
+- **Google Gemini API Key**: Required for LLM functionality
+- **Pinecone API Key**: For vector database (optional, can use local embeddings)
+- **Google Search API Key**: For web search functionality (optional)
 
-**2. Install Dependencies:**
+### Environment Setup
 
-**Backend:**
+1. **Navigate to the backend directory:**
+   ```bash
+   cd backend
+   ```
 
+2. **Create environment file:**
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **Configure your API keys in `.env`:**
+   ```env
+   GEMINI_API_KEY="your_gemini_api_key_here"
+   PINECONE_API_KEY="your_pinecone_api_key_here"  # Optional
+   GOOGLE_SEARCH_API_KEY="your_google_search_key"  # Optional
+   LANGSMITH_API_KEY="your_langsmith_key"  # Optional for monitoring
+   ```
+
+### Installation
+
+**Backend Dependencies:**
 ```bash
 cd backend
 pip install .
+# or with uv (recommended)
+uv sync
 ```
 
-**Frontend:**
-
+**Frontend Dependencies:**
 ```bash
 cd frontend
 npm install
 ```
 
-**3. Run Development Servers:**
+### Running the Application
 
-**Backend & Frontend:**
-
+**Quick Start (Recommended):**
 ```bash
+# From project root
 make dev
 ```
-This will run the backend and frontend development servers.    Open your browser and navigate to the frontend development server URL (e.g., `http://localhost:5173/app`).
 
-_Alternatively, you can run the backend and frontend development servers separately. For the backend, open a terminal in the `backend/` directory and run `langgraph dev`. The backend API will be available at `http://127.0.0.1:2024`. It will also open a browser window to the LangGraph UI. For the frontend, open a terminal in the `frontend/` directory and run `npm run dev`. The frontend will be available at `http://localhost:5173`._
+This command runs both backend and frontend development servers simultaneously.
 
-## How the Backend Agent Works (High-Level)
+**Manual Start:**
 
-The core of the backend is a LangGraph agent defined in `backend/src/agent/graph.py`. It follows these steps:
+1. **Backend Server** (Terminal 1):
+   ```bash
+   cd backend
+   langgraph dev
+   ```
+   Backend API: `http://127.0.0.1:2024`
+   LangGraph UI: `http://127.0.0.1:2024/docs`
+
+2. **Frontend Server** (Terminal 2):
+   ```bash
+   cd frontend
+   npm run dev
+   ```
+   Frontend: `http://localhost:5173/app`
+
+### First Steps
+
+1. **Upload Documents**: Use the upload interface to add your documents
+2. **Start Chatting**: Ask questions about your uploaded documents
+3. **Explore Features**: Try web search, document analysis, and chat history
+
+## 🧠 How the System Works
+
+### RAG Pipeline Architecture
+
+The system implements a sophisticated RAG pipeline that combines document analysis with web research:
 
 <img src="./agent.png" title="Agent Flow" alt="Agent Flow" width="50%">
 
-1.  **Generate Initial Queries:** Based on your input, it generates a set of initial search queries using a Gemini model.
-2.  **Web Research:** For each query, it uses the Gemini model with the Google Search API to find relevant web pages.
-3.  **Reflection & Knowledge Gap Analysis:** The agent analyzes the search results to determine if the information is sufficient or if there are knowledge gaps. It uses a Gemini model for this reflection process.
-4.  **Iterative Refinement:** If gaps are found or the information is insufficient, it generates follow-up queries and repeats the web research and reflection steps (up to a configured maximum number of loops).
-5.  **Finalize Answer:** Once the research is deemed sufficient, the agent synthesizes the gathered information into a coherent answer, including citations from the web sources, using a Gemini model.
+### Document Processing Flow
 
-## CLI Example
+1. **Upload & Processing**: Documents are uploaded and processed through format-specific loaders
+2. **Text Extraction**: Content is extracted and split into semantic chunks
+3. **Embedding Generation**: Text chunks are converted to vector embeddings
+4. **Vector Storage**: Embeddings are stored in Pinecone for efficient retrieval
+5. **Indexing**: Metadata and references are maintained for source tracking
 
-For quick one-off questions you can execute the agent from the command line. The
-script `backend/examples/cli_research.py` runs the LangGraph agent and prints the
-final answer:
+### Query Processing Flow
+
+1. **Query Analysis**: User input is analyzed and search strategies are determined
+2. **Document Retrieval**: Relevant document chunks are retrieved from vector store
+3. **Re-ranking**: Results are re-ranked using cross-encoder models for relevance
+4. **Web Research** (if needed): Additional web search for missing information
+5. **Knowledge Gap Analysis**: System identifies if more information is needed
+6. **Response Generation**: Final answer is synthesized with citations
+
+### LangGraph Agent Workflow
+
+1. **Generate Initial Queries**: Creates targeted search queries from user input
+2. **Multi-source Research**: Searches both documents and web simultaneously  
+3. **Reflection & Analysis**: Evaluates completeness and identifies knowledge gaps
+4. **Iterative Refinement**: Refines queries and searches until sufficient information is gathered
+5. **Answer Synthesis**: Combines all sources into a coherent, cited response
+
+### Key Components
+
+- **Document Loader**: Handles PDF, Word, PowerPoint, Excel, and text files
+- **Embedding Service**: Generates semantic embeddings for text chunks
+- **Vector Store**: Pinecone database for efficient similarity search
+- **Re-ranker**: Cross-encoder model for improving result relevance
+- **Chat History**: Persistent conversation management
+- **Activity Timeline**: Real-time processing visualization
+
+## 🔌 API Endpoints
+
+### Core Functionality
+- `POST /uploadfile/` - Upload and process documents (PDF, Word, Excel, etc.)
+- `POST /query/` - Query the vector database with natural language
+- `GET /vector-store/status` - Check vector database status and statistics
+- `GET /vector-store/info` - Get detailed information about stored documents
+- `GET /health` - System health check
+
+### Chat History Management
+- `GET /conversations/` - List all conversations with pagination
+- `POST /conversations/` - Create a new conversation
+- `GET /conversations/{id}` - Get specific conversation details
+- `DELETE /conversations/{id}` - Delete a conversation
+- `POST /conversations/{id}/messages` - Add message to conversation
+
+### Development & Monitoring
+- `GET /` - Frontend application (production)
+- `GET /app/` - Frontend application (development)
+- `GET /docs` - LangGraph API documentation
+- WebSocket endpoints for real-time updates during processing
+
+## 🧪 CLI Example
+
+For quick testing and automation, you can execute the agent from the command line:
 
 ```bash
 cd backend
 python examples/cli_research.py "What are the latest trends in renewable energy?"
 ```
 
+## 🧪 Testing
 
-## Deployment
+### Manual Testing Interfaces
+The backend includes HTML testing interfaces for development:
+- `backend/rag_test.html` - Test RAG functionality
+- `backend/enhanced_chat_test.html` - Test chat interface
+- `backend/test_upload.html` - Test file upload
 
-In production, the backend server serves the optimized static frontend build. LangGraph requires a Redis instance and a Postgres database. Redis is used as a pub-sub broker to enable streaming real time output from background runs. Postgres is used to store assistants, threads, runs, persist thread state and long term memory, and to manage the state of the background task queue with 'exactly once' semantics. For more details on how to deploy the backend server, take a look at the [LangGraph Documentation](https://langchain-ai.github.io/langgraph/concepts/deployment_options/). Below is an example of how to build a Docker image that includes the optimized frontend build and the backend server and run it via `docker-compose`.
+### Automated Testing
+```bash
+cd backend
 
-_Note: For the docker-compose.yml example you need a LangSmith API key, you can get one from [LangSmith](https://smith.langchain.com/settings)._
+# Run all tests
+python -m pytest
 
-_Note: If you are not running the docker-compose.yml example or exposing the backend server to the public internet, you should update the `apiUrl` in the `frontend/src/App.tsx` file to your host. Currently the `apiUrl` is set to `http://localhost:8123` for docker-compose or `http://localhost:2024` for development._
+# Specific test files
+python test_document_loader.py
+python test_reranking.py
+python test_async_operations.py
+python test_upload_api.py
+```
+
+### Frontend Testing
+```bash
+cd frontend
+
+# Linting
+npm run lint
+
+# Type checking
+npm run build
+```
+
+
+## 🚢 Production Deployment
+
+The application is designed for production deployment using Docker and supports horizontal scaling.
+
+### Docker Deployment
 
 **1. Build the Docker Image:**
+```bash
+# Build multi-stage image (from project root)
+docker build -t rag-chatbot-langgraph -f Dockerfile .
+```
 
-   Run the following command from the **project root directory**:
-   ```bash
-   docker build -t gemini-fullstack-langgraph -f Dockerfile .
-   ```
-**2. Run the Production Server:**
+**2. Run with Docker Compose:**
+```bash
+# Set environment variables and start services
+GEMINI_API_KEY=<your_gemini_api_key> \
+LANGSMITH_API_KEY=<your_langsmith_api_key> \
+PINECONE_API_KEY=<your_pinecone_api_key> \
+docker-compose up
+```
 
-   ```bash
-   GEMINI_API_KEY=<your_gemini_api_key> LANGSMITH_API_KEY=<your_langsmith_api_key> docker-compose up
-   ```
+**Access the application:**
+- Frontend: `http://localhost:8123/app/`
+- API: `http://localhost:8123`
+- Health Check: `http://localhost:8123/health`
 
-Open your browser and navigate to `http://localhost:8123/app/` to see the application. The API will be available at `http://localhost:8123`.
+### Environment Configuration
 
-## Technologies Used
+#### Required Environment Variables
+```env
+GEMINI_API_KEY=your_gemini_api_key      # Google Gemini for LLM
+```
 
-- [React](https://reactjs.org/) (with [Vite](https://vitejs.dev/)) - For the frontend user interface.
-- [Tailwind CSS](https://tailwindcss.com/) - For styling.
-- [Shadcn UI](https://ui.shadcn.com/) - For components.
-- [LangGraph](https://github.com/langchain-ai/langgraph) - For building the backend research agent.
-- [Google Gemini](https://ai.google.dev/models/gemini) - LLM for query generation, reflection, and answer synthesis.
+#### Optional Environment Variables
+```env
+PINECONE_API_KEY=your_pinecone_key      # Vector database
+GOOGLE_SEARCH_API_KEY=your_search_key   # Web search functionality
+LANGSMITH_API_KEY=your_langsmith_key    # Monitoring and observability
+DATABASE_URL=postgresql://...           # Chat history storage
+REDIS_URL=redis://...                   # Caching and pub-sub
+```
 
-## License
+### Infrastructure Requirements
 
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details. 
+#### Minimum Requirements
+- **CPU**: 2+ cores
+- **Memory**: 4GB+ RAM  
+- **Storage**: 10GB+ for documents and cache
+- **Network**: Internet access for API calls
+
+#### Recommended for Production
+- **CPU**: 4+ cores
+- **Memory**: 8GB+ RAM
+- **Storage**: 50GB+ SSD
+- **Database**: PostgreSQL 13+
+- **Cache**: Redis 6+
+- **Vector DB**: Pinecone or self-hosted alternative
+
+### Scaling Considerations
+
+- **Stateless Design**: Backend can be horizontally scaled
+- **External Dependencies**: Vector DB, PostgreSQL, and Redis support scaling
+- **File Storage**: Consider cloud storage for document uploads in multi-instance setups
+- **Load Balancing**: Use nginx or cloud load balancers for high availability
+
+### Production Checklist
+
+- [ ] Set all required environment variables
+- [ ] Configure HTTPS/TLS certificates  
+- [ ] Set up monitoring and logging
+- [ ] Configure backup strategies for databases
+- [ ] Implement rate limiting
+- [ ] Set up health check endpoints
+- [ ] Configure CORS for your domain
+- [ ] Set up log aggregation
+- [ ] Implement error tracking
+
+## 🛠️ Technologies Used
+
+### Frontend Stack
+- **[React 18](https://reactjs.org/)** - Modern UI library with hooks and concurrent features
+- **[TypeScript](https://www.typescriptlang.org/)** - Type-safe JavaScript development
+- **[Vite](https://vitejs.dev/)** - Fast build tool and development server
+- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS framework
+- **[Shadcn UI](https://ui.shadcn.com/)** - Beautiful and accessible component library
+
+### Backend Stack
+- **[Python 3.11+](https://python.org/)** - Core backend language
+- **[FastAPI](https://fastapi.tiangolo.com/)** - Modern, fast web framework for APIs
+- **[LangGraph](https://github.com/langchain-ai/langgraph)** - Advanced agent orchestration framework
+- **[LangChain](https://github.com/langchain-ai/langchain)** - LLM application development framework
+- **[Pydantic](https://pydantic-docs.helpmanual.io/)** - Data validation using Python type annotations
+
+### AI & ML Components
+- **[Google Gemini](https://ai.google.dev/models/gemini)** - Large language model for reasoning and generation
+- **[Sentence Transformers](https://www.sbert.net/)** - Text embedding generation and re-ranking
+- **[Pinecone](https://www.pinecone.io/)** - Managed vector database for semantic search
+- **[Google Search API](https://developers.google.com/custom-search/v1/overview)** - Web search integration
+
+### Document Processing
+- **[unstructured](https://github.com/Unstructured-IO/unstructured)** - Multi-format document parsing
+- **[docx2txt](https://github.com/ankushshah89/python-docx2txt)** - Word document processing  
+- **[openpyxl](https://openpyxl.readthedocs.io/)** - Excel file handling
+- **[python-pptx](https://python-pptx.readthedocs.io/)** - PowerPoint processing
+- **[PyPDF2](https://pypdf2.readthedocs.io/)** - PDF text extraction
+
+### Infrastructure & DevOps
+- **[Docker](https://www.docker.com/)** - Containerization and deployment
+- **[PostgreSQL](https://www.postgresql.org/)** - Relational database for chat history
+- **[Redis](https://redis.io/)** - Caching and pub-sub messaging
+- **[UV](https://github.com/astral-sh/uv)** - Fast Python package installer and resolver
+
+### Development Tools
+- **[ESLint](https://eslint.org/)** - JavaScript/TypeScript linting
+- **[Prettier](https://prettier.io/)** - Code formatting
+- **[Ruff](https://github.com/astral-sh/ruff)** - Fast Python linter and formatter
+- **[pytest](https://pytest.org/)** - Python testing framework
+- **[LangSmith](https://smith.langchain.com/)** - LLM application monitoring and observability
+
+## 📚 Documentation
+
+- **[SYSTEMOVA_DOKUMENTACE.md](SYSTEMOVA_DOKUMENTACE.md)** - Comprehensive system documentation (Czech)
+- **[CHAT_HISTORY_README.md](CHAT_HISTORY_README.md)** - Chat history implementation guide
+- **[Backend Tests](backend/tests/)** - Manual testing interfaces and examples
+- **[LangGraph Documentation](https://langchain-ai.github.io/langgraph/)** - Official LangGraph docs
+- **[FastAPI Documentation](https://fastapi.tiangolo.com/)** - API framework documentation
+
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make your changes** and add tests
+4. **Run the test suite**: `make test`
+5. **Commit your changes**: `git commit -m 'Add amazing feature'`
+6. **Push to the branch**: `git push origin feature/amazing-feature`
+7. **Open a Pull Request**
+
+### Development Guidelines
+- Follow TypeScript and Python type hints
+- Add tests for new functionality
+- Update documentation for API changes
+- Use conventional commit messages
+- Ensure all tests pass before submitting
+
+## 📄 License
+
+This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support & Troubleshooting
+
+### Common Issues
+1. **API Key Errors**: Verify all required API keys are set in `.env`
+2. **Docker Issues**: Ensure Docker and docker-compose are properly installed
+3. **Port Conflicts**: Check that ports 2024 (backend) and 5173 (frontend) are available
+4. **Vector Database**: Verify Pinecone API key and index configuration
+
+### Getting Help
+- Check the [Issues](https://github.com/ser888gio/prototyp-na-patek/issues) page for known problems
+- Review the comprehensive [system documentation](SYSTEMOVA_DOKUMENTACE.md)
+- Examine the manual testing interfaces in `backend/tests/`
+
+---
+
+**Built with ❤️ using LangGraph, React, and Google Gemini** 

@@ -10,6 +10,8 @@ import { useChatHistory } from "@/hooks/useChatHistory";
 import { PanelLeft, PanelLeftClose } from "lucide-react";
 
 export default function App() {
+  console.log("🏠 EnhancedApp: Component loaded/rendered");
+
   const [processedEventsTimeline, setProcessedEventsTimeline] = useState<
     ProcessedEvent[]
   >([]);
@@ -24,6 +26,15 @@ export default function App() {
 
   // Chat history management
   const chatHistory = useChatHistory(userId);
+
+  // Debug logging
+  useEffect(() => {
+    console.log("🎨 EnhancedApp: Sidebar state changed", {
+      showSidebar,
+      userId,
+      currentConversationId: chatHistory.currentConversation?.id,
+    });
+  }, [showSidebar, userId, chatHistory.currentConversation?.id]);
 
   const thread = useStream<{
     messages: Message[];

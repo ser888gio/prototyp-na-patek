@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -36,6 +36,11 @@ export function ConversationList({
   onCreateConversation,
   userId,
 }: ConversationListProps) {
+  console.log("🚀 ConversationList: Component mounted/rendered", {
+    userId,
+    currentConversationId,
+  });
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,7 +51,12 @@ export function ConversationList({
     : "http://localhost:8123";
 
   // Fetch conversations
-  const fetchConversations = async () => {
+  const fetchConversations = useCallback(async () => {
+    console.log("🔍 ConversationList: fetchConversations called", {
+      userId,
+      searchQuery,
+      showArchived,
+    });
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -54,23 +64,33 @@ export function ConversationList({
       if (searchQuery) params.append("search", searchQuery);
       params.append("limit", "50");
 
-      const response = await fetch(
-        `${API_BASE}/api/chat-history/conversations?${params.toString()}`
-      );
+      const url = `${API_BASE}/api/chat-history/conversations?${params.toString()}`;
+      console.log("📡 ConversationList: Making API request to:", url);
+
+      const response = await fetch(url);
+      console.log("📡 ConversationList: API response status:", response.status);
 
       if (response.ok) {
         const data = await response.json();
+        console.log("📡 ConversationList: API response data:", data);
         const filteredConversations = showArchived
           ? data
           : data.filter((conv: Conversation) => conv.status === "active");
+        console.log(
+          "📡 ConversationList: Filtered conversations:",
+          filteredConversations
+        );
         setConversations(filteredConversations);
       }
     } catch (error) {
-      console.error("Failed to fetch conversations:", error);
+      console.error(
+        "❌ ConversationList: Failed to fetch conversations:",
+        error
+      );
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, searchQuery, showArchived, API_BASE]);
 
   // Archive conversation
   const archiveConversation = async (conversationId: string) => {
@@ -142,7 +162,7 @@ export function ConversationList({
   // Effect for fetching conversations
   useEffect(() => {
     fetchConversations();
-  }, [searchQuery, showArchived, userId]);
+  }, [searchQuery, showArchived, userId, fetchConversations]);
 
   return (
     <Card className="w-80 h-full flex flex-col">
