@@ -39,6 +39,23 @@ class Configuration(BaseModel):
         metadata={"description": "The maximum number of research loops to perform."},
     )
 
+    enable_reranking: bool = Field(
+        default=True,
+        metadata={"description": "Whether to enable document re-ranking after initial retrieval."},
+    )
+
+    reranking_strategy: str = Field(
+        default="hybrid",
+        metadata={
+            "description": "The re-ranking strategy to use. Options: 'cross_encoder', 'hybrid'."
+        },
+    )
+
+    reranking_top_k: int = Field(
+        default=5,
+        metadata={"description": "Number of top documents to keep after re-ranking."},
+    )
+
     @classmethod
     def from_runnable_config(
         cls, config: Optional[RunnableConfig] = None

@@ -14,11 +14,16 @@ class OverallState(TypedDict):
     messages: Annotated[list, add_messages]
     search_query: Annotated[list, operator.add]
     web_research_result: Annotated[list, operator.add]
+    rag_results: Annotated[list, operator.add]
     sources_gathered: Annotated[list, operator.add]
     initial_search_query_count: int
     max_research_loops: int
     research_loop_count: int
     reasoning_model: str
+    # Enhanced conversation context
+    conversation_id: str
+    conversation_history: Annotated[list, operator.add]  # Previous conversation context
+    user_id: str
 
 
 class ReflectionState(TypedDict):

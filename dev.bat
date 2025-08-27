@@ -31,7 +31,7 @@ GOTO :EOF
 :dev_backend
 REM Starts the backend development server in a new window.
 echo Starting backend development server...
-start "Backend" cmd /c "cd backend && langgraph dev"
+start "Backend" cmd /c "cd backend && langgraph dev --allow-blocking"
 GOTO :EOF
 
 :dev_all
