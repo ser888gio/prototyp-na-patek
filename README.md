@@ -161,9 +161,9 @@ npm install
 ### Running the Application
 
 **Quick Start (Recommended):**
-```bash
+```
 # From project root
-make dev
+In the CMD terminal write this: .\dev.bat dev
 ```
 
 This command runs both backend and frontend development servers simultaneously.
@@ -363,18 +363,6 @@ REDIS_URL=redis://...                   # Caching and pub-sub
 - **File Storage**: Consider cloud storage for document uploads in multi-instance setups
 - **Load Balancing**: Use nginx or cloud load balancers for high availability
 
-### Production Checklist
-
-- [ ] Set all required environment variables
-- [ ] Configure HTTPS/TLS certificates  
-- [ ] Set up monitoring and logging
-- [ ] Configure backup strategies for databases
-- [ ] Implement rate limiting
-- [ ] Set up health check endpoints
-- [ ] Configure CORS for your domain
-- [ ] Set up log aggregation
-- [ ] Implement error tracking
-
 ## 🛠️ Technologies Used
 
 ### Frontend Stack
@@ -417,48 +405,3 @@ REDIS_URL=redis://...                   # Caching and pub-sub
 - **[pytest](https://pytest.org/)** - Python testing framework
 - **[LangSmith](https://smith.langchain.com/)** - LLM application monitoring and observability
 
-## 📚 Documentation
-
-- **[SYSTEMOVA_DOKUMENTACE.md](SYSTEMOVA_DOKUMENTACE.md)** - Comprehensive system documentation (Czech)
-- **[CHAT_HISTORY_README.md](CHAT_HISTORY_README.md)** - Chat history implementation guide
-- **[Backend Tests](backend/tests/)** - Manual testing interfaces and examples
-- **[LangGraph Documentation](https://langchain-ai.github.io/langgraph/)** - Official LangGraph docs
-- **[FastAPI Documentation](https://fastapi.tiangolo.com/)** - API framework documentation
-
-## 🤝 Contributing
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes** and add tests
-4. **Run the test suite**: `make test`
-5. **Commit your changes**: `git commit -m 'Add amazing feature'`
-6. **Push to the branch**: `git push origin feature/amazing-feature`
-7. **Open a Pull Request**
-
-### Development Guidelines
-- Follow TypeScript and Python type hints
-- Add tests for new functionality
-- Update documentation for API changes
-- Use conventional commit messages
-- Ensure all tests pass before submitting
-
-## 📄 License
-
-This project is licensed under the Apache License 2.0. See the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support & Troubleshooting
-
-### Common Issues
-1. **API Key Errors**: Verify all required API keys are set in `.env`
-2. **Docker Issues**: Ensure Docker and docker-compose are properly installed
-3. **Port Conflicts**: Check that ports 2024 (backend) and 5173 (frontend) are available
-4. **Vector Database**: Verify Pinecone API key and index configuration
-
-### Getting Help
-- Check the [Issues](https://github.com/ser888gio/prototyp-na-patek/issues) page for known problems
-- Review the comprehensive [system documentation](SYSTEMOVA_DOKUMENTACE.md)
-- Examine the manual testing interfaces in `backend/tests/`
-
----
-
-**Built with ❤️ using LangGraph, React, and Google Gemini** 
