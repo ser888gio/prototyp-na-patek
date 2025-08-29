@@ -102,17 +102,49 @@ export default function App() {
     },
   });
 
+  // Debug logging for save function
+  useEffect(() => {
+    console.log("[DEBUG] EnhancedApp: chatHistory state:", {
+      currentConversation: chatHistory.currentConversation,
+      saveConversation: !!chatHistory.saveConversation,
+      messagesLength: thread.messages.length,
+    });
+  }, [
+    chatHistory.currentConversation,
+    chatHistory.saveConversation,
+    thread.messages.length,
+  ]);
+
   // Save messages to history when they're added
   useEffect(() => {
+    console.log(
+      `[DEBUG] EnhancedApp: useEffect triggered - messages.length=${thread.messages.length}, currentConversation=${chatHistory.currentConversation?.id}`
+    );
+    console.log(`[DEBUG] EnhancedApp: chatHistory state:`, {
+      currentConversation: chatHistory.currentConversation,
+    });
+
+    console.log(`[DEBUG] EnhancedApp: thread.messages:`, thread.messages);
+
     if (chatHistory.currentConversation && thread.messages.length > 0) {
       const lastMessage = thread.messages[thread.messages.length - 1];
+      console.log(`[DEBUG] EnhancedApp: Last message:`, lastMessage);
 
       // Only save new messages (avoid duplicates)
       if (lastMessage && lastMessage.id) {
-        chatHistory.saveMessage(
-          chatHistory.currentConversation.id,
-          lastMessage
+        console.log(
+          `[DEBUG] EnhancedApp: Saving message ${lastMessage.id} to conversation ${chatHistory.currentConversation.id}`
         );
+
+        // EMERGENCY: Let's try saving the message and catch any errors
+        chatHistory
+          .saveMessage(chatHistory.currentConversation.id, lastMessage)
+          .catch((error) => {
+            console.error(
+              `[DEBUG] EnhancedApp: CRITICAL ERROR saving message:`,
+              error
+            );
+          });
 
         // Auto-generate title from first human message
         if (
@@ -120,11 +152,49 @@ export default function App() {
           lastMessage.type === "human" &&
           typeof lastMessage.content === "string"
         ) {
+          console.log(
+            `[DEBUG] EnhancedApp: Auto-generating title for conversation from message: ${lastMessage.content.substring(
+              0,
+              50
+            )}...`
+          );
           chatHistory.autoGenerateTitle(
             chatHistory.currentConversation.id,
             lastMessage.content
           );
         }
+      } else {
+        console.log(
+          `[DEBUG] EnhancedApp: Last message has no ID, skipping save. Message:`,
+          lastMessage
+        );
+      }
+    } else {
+      console.log(
+        `[DEBUG] EnhancedApp: Not saving - currentConversation exists: ${!!chatHistory.currentConversation}, messages.length: ${
+          thread.messages.length
+        }`
+      );
+
+      // EMERGENCY: If no current conversation but we have messages, try to create one
+      if (!chatHistory.currentConversation && thread.messages.length > 0) {
+        console.log(
+          `[DEBUG] EnhancedApp: EMERGENCY - Creating conversation because messages exist but no conversation`
+        );
+        chatHistory
+          .createConversation()
+          .then((conv) => {
+            console.log(
+              `[DEBUG] EnhancedApp: Emergency conversation created:`,
+              conv
+            );
+          })
+          .catch((error) => {
+            console.error(
+              `[DEBUG] EnhancedApp: Emergency conversation creation failed:`,
+              error
+            );
+          });
       }
     }
   }, [thread.messages, chatHistory]);
@@ -326,6 +396,8 @@ export default function App() {
             onCancel={handleCancel}
             liveActivityEvents={processedEventsTimeline}
             historicalActivities={historicalActivities}
+            onSaveConversation={chatHistory.saveConversation}
+            currentConversationId={chatHistory.currentConversation?.id}
           />
         )}
       </main>

@@ -10,7 +10,6 @@ from pydantic import BaseModel, field_validator
 from datetime import datetime
 from agent.database import get_db
 from agent.chat_history_service import ChatHistoryService
-from agent.models import Conversation, Message
 import uuid
 
 # Create router for chat history endpoints
@@ -173,19 +172,25 @@ async def add_message(
     db: Session = Depends(get_db)
 ):
     """Add a message to a conversation"""
+    print(f"[DEBUG] API: Received request to add message to conversation {conversation_id}")
+    print(f"[DEBUG] API: Message type='{message.type}', content_length={len(message.content)}")
+    
     service = ChatHistoryService(db)
     
     # Verify conversation exists
     conversation = await service.get_conversation(conversation_id)
     if not conversation:
+        print(f"[DEBUG] API: ERROR - Conversation {conversation_id} not found!")
         raise HTTPException(status_code=404, detail="Conversation not found")
     
+    print(f"[DEBUG] API: Conversation found, calling service.add_message...")
     new_message = await service.add_message(
         conversation_id=conversation_id,
         message_type=message.type,
         content=message.content,
         extra_data=message.extra_data
     )
+    print(f"[DEBUG] API: Message successfully created with ID: {new_message.id}")
     return new_message
 
 @chat_history_router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
@@ -267,5 +272,41 @@ async def cleanup_old_sessions(
     cleaned_count = await service.cleanup_old_sessions(hours=hours)
     return {"message": f"Cleaned up {cleaned_count} old sessions"}
 
+@chat_history_router.post("/conversations/{conversation_id}/save")
+async def save_conversation(
+    conversation_id: str,
+    db: Session = Depends(get_db)
+):
+    """Explicitly save/refresh a conversation to ensure all data is persisted"""
+    print(f"[DEBUG] API: Manual save requested for conversation {conversation_id}")
+    
+    service = ChatHistoryService(db)
+    
+    # Verify conversation exists
+    conversation = await service.get_conversation(conversation_id)
+    if not conversation:
+        print(f"[DEBUG] API: ERROR - Conversation {conversation_id} not found!")
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    # Force a save/refresh by updating the updated_at timestamp
+    saved_conversation = await service.manual_save_conversation(conversation_id)
+    
+    return {
+        "message": "Conversation saved successfully",
+        "conversation": {
+            "id": saved_conversation.id,
+            "title": saved_conversation.title,
+            "updated_at": saved_conversation.updated_at,
+            "message_count": saved_conversation.message_count
+        }
+    }
+
 # Export the router to be included in your main app
 __all__ = ["chat_history_router"]
+
+# Add a simple test endpoint to verify the chat history API is working
+@chat_history_router.get("/test")
+async def test_endpoint():
+    """Simple test endpoint to verify chat history API is accessible"""
+    print("[DEBUG] Chat history test endpoint called successfully!")
+    return {"status": "Chat history API is working", "timestamp": datetime.now().isoformat()}

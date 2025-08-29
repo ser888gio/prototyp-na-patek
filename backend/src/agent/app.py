@@ -262,6 +262,8 @@ async def query_documents(request: Request):
         # Parse the request body
         body = await request.json()
         query_text = body.get("query", "").strip()
+        conversation_id = body.get("conversation_id")  # Optional
+        user_id = body.get("user_id")  # Optional
         
         if not query_text:
             return {
@@ -271,6 +273,42 @@ async def query_documents(request: Request):
         
         print(f"========== QUERY DEBUG START ==========")
         print(f"Received query: {query_text}")
+        print(f"Conversation ID: {conversation_id}")
+        print(f"User ID: {user_id}")
+        
+        # Import required modules
+        from agent.database import get_db
+        from agent.chat_history_service import ChatHistoryService
+        
+        # AUTO-CREATE/UPDATE CONVERSATION
+        db = next(get_db())
+        chat_service = ChatHistoryService(db)
+        
+        if not conversation_id:
+            # Create new conversation for this query session
+            conversation = await chat_service.create_conversation(
+                title="Document Search Session",
+                user_id=user_id
+            )
+            conversation_id = str(conversation.id)
+            print(f"Created new conversation: {conversation_id}")
+        else:
+            # Verify existing conversation exists
+            existing_conversation = await chat_service.get_conversation(conversation_id)
+            if not existing_conversation:
+                print(f"Conversation {conversation_id} not found, creating new one")
+                conversation = await chat_service.create_conversation(
+                    title="Document Search Session",
+                    user_id=user_id
+                )
+                conversation_id = str(conversation.id)
+        
+        # Add user query as message
+        await chat_service.add_message(
+            conversation_id=conversation_id,
+            message_type="human",
+            content=query_text
+        )
         
         # Initialize vector store if not already done
         if vector_store is None:
@@ -335,9 +373,18 @@ async def query_documents(request: Request):
         
         print(f"========== END RETRIEVAL RESULTS ==========\n")
         
+        # Add AI response with results
+        await chat_service.add_message(
+            conversation_id=conversation_id,
+            message_type="ai",
+            content=f"Found {len(results)} relevant documents",
+            extra_data={"search_results": results[:3]}  # Store top 3 results
+        )
+        
         print("========== QUERY SUCCESS ==========")
         return {
             "status": "success",
+            "conversation_id": conversation_id,  # Return so frontend can continue conversation
             "query": query_text,
             "results": results,
             "count": len(results)
@@ -377,6 +424,37 @@ async def upload_file(request: Request):
         form = await request.form()
         print("Form keys:", list(form.keys()))
         
+        # Extract conversation tracking data
+        conversation_id = form.get("conversation_id")
+        user_id = form.get("user_id")
+        
+        # Import required modules for chat history
+        from agent.database import get_db
+        from agent.chat_history_service import ChatHistoryService
+        
+        # Initialize chat history service
+        db = next(get_db())
+        chat_service = ChatHistoryService(db)
+        
+        if not conversation_id:
+            # Create new conversation for this upload session
+            conversation = await chat_service.create_conversation(
+                title="Document Upload Session",
+                user_id=user_id
+            )
+            conversation_id = str(conversation.id)
+            print(f"Created new conversation for upload: {conversation_id}")
+        else:
+            # Verify existing conversation exists
+            existing_conversation = await chat_service.get_conversation(conversation_id)
+            if not existing_conversation:
+                print(f"Conversation {conversation_id} not found, creating new one")
+                conversation = await chat_service.create_conversation(
+                    title="Document Upload Session",
+                    user_id=user_id
+                )
+                conversation_id = str(conversation.id)
+        
         # Collect all files from the form
         uploaded_files = []
         
@@ -415,6 +493,14 @@ async def upload_file(request: Request):
         total_chunks = 0
         total_pages = 0
         errors = []
+        
+        # Add initial upload message to conversation
+        upload_message = f"Uploading {len(uploaded_files)} file(s): " + ", ".join([f.filename for f in uploaded_files])
+        await chat_service.add_message(
+            conversation_id=conversation_id,
+            message_type="human",
+            content=upload_message
+        )
         
         for i, file_upload in enumerate(uploaded_files):
             print(f"\n--- Processing file {i+1}/{len(uploaded_files)}: {file_upload.filename} ---")
@@ -547,11 +633,34 @@ async def upload_file(request: Request):
     print(f"Total pages: {total_pages}")
     print(f"Total chunks: {total_chunks}")
     
+    # Add completion message to conversation
+    completion_message = f"Upload complete! Processed {len(successful_files)}/{len(uploaded_files)} files successfully. "
+    completion_message += f"Total: {total_pages} pages, {total_chunks} chunks added to knowledge base."
+    if failed_files:
+        completion_message += f" {len(failed_files)} file(s) failed to process."
+    
+    await chat_service.add_message(
+        conversation_id=conversation_id,
+        message_type="ai",
+        content=completion_message,
+        extra_data={
+            "upload_summary": {
+                "total_files": len(uploaded_files),
+                "successful_files": len(successful_files),
+                "failed_files": len(failed_files),
+                "total_pages": total_pages,
+                "total_chunks": total_chunks,
+                "results": results
+            }
+        }
+    )
+    
     # Return comprehensive response
     if len(successful_files) == len(uploaded_files):
         # All files successful
         return {
             "status": "success",
+            "conversation_id": conversation_id,  # Include conversation ID
             "message": f"Successfully processed {len(uploaded_files)} file(s)",
             "files_processed": len(uploaded_files),
             "total_pages": total_pages,
@@ -562,6 +671,7 @@ async def upload_file(request: Request):
         # Partial success
         return {
             "status": "partial_success",
+            "conversation_id": conversation_id,  # Include conversation ID
             "message": f"Processed {len(successful_files)} out of {len(uploaded_files)} files successfully",
             "files_processed": len(successful_files),
             "files_failed": len(failed_files),
@@ -574,6 +684,7 @@ async def upload_file(request: Request):
         # All files failed
         return {
             "status": "error",
+            "conversation_id": conversation_id,  # Include conversation ID
             "message": f"Failed to process all {len(uploaded_files)} file(s)",
             "files_failed": len(failed_files),
             "results": results,

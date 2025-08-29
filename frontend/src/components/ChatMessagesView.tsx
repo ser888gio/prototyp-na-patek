@@ -227,6 +227,8 @@ interface ChatMessagesViewProps {
   onCancel: () => void;
   liveActivityEvents: ProcessedEvent[];
   historicalActivities: Record<string, ProcessedEvent[]>;
+  onSaveConversation?: (conversationId: string) => Promise<void>;
+  currentConversationId?: string;
 }
 
 export function ChatMessagesView({
@@ -237,8 +239,18 @@ export function ChatMessagesView({
   onCancel,
   liveActivityEvents,
   historicalActivities,
+  onSaveConversation,
+  currentConversationId,
 }: ChatMessagesViewProps) {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  // Debug logging
+  console.log("[DEBUG] ChatMessagesView render:", {
+    messagesLength: messages.length,
+    onSaveConversation: !!onSaveConversation,
+    currentConversationId,
+    hasHistory: messages.length > 0,
+  });
 
   const handleCopy = async (text: string, messageId: string) => {
     try {
@@ -313,6 +325,8 @@ export function ChatMessagesView({
         isLoading={isLoading}
         onCancel={onCancel}
         hasHistory={messages.length > 0}
+        onSaveConversation={onSaveConversation}
+        currentConversationId={currentConversationId}
       />
     </div>
   );

@@ -21,14 +21,17 @@ class ChatHistoryService:
         extra_data: Optional[Dict[str, Any]] = None
     ) -> Conversation:
         """Create a new conversation"""
+        print(f"[DEBUG] Creating new conversation with title: '{title}', user_id: {user_id}")
         conversation = Conversation(
             title=title,
             user_id=user_id,
             extra_data=extra_data or {}
         )
         self.db.add(conversation)
+        print(f"[DEBUG] Added conversation to session, committing to database...")
         self.db.commit()
         self.db.refresh(conversation)
+        print(f"[DEBUG] Conversation saved successfully with ID: {conversation.id}")
         return conversation
     
     async def get_conversation(self, conversation_id: str) -> Optional[Conversation]:
@@ -71,10 +74,14 @@ class ChatHistoryService:
         extra_data: Optional[Dict[str, Any]] = None
     ) -> Message:
         """Add a message to a conversation"""
+        print(f"[DEBUG] Adding message to conversation {conversation_id}: type='{message_type}', content_length={len(content)}")
+        
         # Get current message count for sequence numbering
         message_count = self.db.query(func.count(Message.id)).filter(
             Message.conversation_id == conversation_id
         ).scalar()
+        
+        print(f"[DEBUG] Current message count for conversation: {message_count}")
         
         message = Message(
             conversation_id=conversation_id,
@@ -85,6 +92,7 @@ class ChatHistoryService:
         )
         
         self.db.add(message)
+        print(f"[DEBUG] Message added to session with sequence number: {message_count + 1}")
         
         # Update conversation message count and last activity
         conversation = self.db.query(Conversation).filter(
@@ -92,15 +100,22 @@ class ChatHistoryService:
         ).first()
         
         if conversation:
+            print(f"[DEBUG] Updating conversation metadata: old_count={conversation.message_count}, new_count={message_count + 1}")
             conversation.message_count = message_count + 1
             conversation.updated_at = datetime.utcnow()
             
             # Auto-generate title from first human message if still default
             if conversation.title == "New Conversation" and message_type == "human":
-                conversation.title = self._generate_conversation_title(content)
+                new_title = self._generate_conversation_title(content)
+                print(f"[DEBUG] Auto-generating conversation title: '{new_title}'")
+                conversation.title = new_title
+        else:
+            print(f"[DEBUG] WARNING: Conversation {conversation_id} not found!")
         
+        print(f"[DEBUG] Committing message and conversation updates to database...")
         self.db.commit()
         self.db.refresh(message)
+        print(f"[DEBUG] Message saved successfully with ID: {message.id}")
         return message
     
     async def get_messages(
@@ -120,19 +135,26 @@ class ChatHistoryService:
         events: List[Dict[str, Any]]
     ) -> List[ProcessingEvent]:
         """Add processing events to a message"""
+        print(f"[DEBUG] Adding {len(events)} processing events to message {message_id}")
         processing_events = []
         
-        for event_data in events:
+        for i, event_data in enumerate(events):
+            event_type = event_data.get('event_type', 'unknown')
+            title = event_data.get('title', '')
+            print(f"[DEBUG] Processing event {i+1}/{len(events)}: type='{event_type}', title='{title}'")
+            
             event = ProcessingEvent(
                 message_id=message_id,
-                event_type=event_data.get('event_type', 'unknown'),
-                title=event_data.get('title', ''),
+                event_type=event_type,
+                title=title,
                 data=event_data.get('data', '')
             )
             self.db.add(event)
             processing_events.append(event)
         
+        print(f"[DEBUG] Committing {len(processing_events)} processing events to database...")
         self.db.commit()
+        print(f"[DEBUG] Processing events saved successfully")
         return processing_events
     
     async def update_conversation_title(
@@ -141,43 +163,61 @@ class ChatHistoryService:
         title: str
     ) -> Optional[Conversation]:
         """Update conversation title"""
+        print(f"[DEBUG] Updating conversation {conversation_id} title to: '{title}'")
         conversation = self.db.query(Conversation).filter(
             Conversation.id == conversation_id
         ).first()
         
         if conversation:
+            old_title = conversation.title
             conversation.title = title
             conversation.updated_at = datetime.utcnow()
+            print(f"[DEBUG] Title changed from '{old_title}' to '{title}', committing to database...")
             self.db.commit()
             self.db.refresh(conversation)
+            print(f"[DEBUG] Conversation title updated successfully")
+        else:
+            print(f"[DEBUG] WARNING: Conversation {conversation_id} not found for title update!")
         
         return conversation
     
     async def delete_conversation(self, conversation_id: str) -> bool:
         """Soft delete a conversation"""
+        print(f"[DEBUG] Soft deleting conversation {conversation_id}")
         conversation = self.db.query(Conversation).filter(
             Conversation.id == conversation_id
         ).first()
         
         if conversation:
+            old_status = conversation.status
             conversation.status = 'deleted'
             conversation.updated_at = datetime.utcnow()
+            print(f"[DEBUG] Conversation status changed from '{old_status}' to 'deleted', committing to database...")
             self.db.commit()
+            print(f"[DEBUG] Conversation deleted successfully")
             return True
+        else:
+            print(f"[DEBUG] WARNING: Conversation {conversation_id} not found for deletion!")
         
         return False
     
     async def archive_conversation(self, conversation_id: str) -> bool:
         """Archive a conversation"""
+        print(f"[DEBUG] Archiving conversation {conversation_id}")
         conversation = self.db.query(Conversation).filter(
             Conversation.id == conversation_id
         ).first()
         
         if conversation:
+            old_status = conversation.status
             conversation.status = 'archived'
             conversation.updated_at = datetime.utcnow()
+            print(f"[DEBUG] Conversation status changed from '{old_status}' to 'archived', committing to database...")
             self.db.commit()
+            print(f"[DEBUG] Conversation archived successfully")
             return True
+        else:
+            print(f"[DEBUG] WARNING: Conversation {conversation_id} not found for archiving!")
         
         return False
     
@@ -255,12 +295,40 @@ class ChatHistoryService:
     
     async def cleanup_old_sessions(self, hours: int = 24) -> int:
         """Clean up old inactive sessions"""
+        print(f"[DEBUG] Cleaning up sessions older than {hours} hours")
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        print(f"[DEBUG] Cutoff time: {cutoff_time}")
         
         count = self.db.query(SessionModel).filter(
             SessionModel.last_activity < cutoff_time,
             SessionModel.status == 'active'
         ).update({"status": "expired"})
         
+        print(f"[DEBUG] Expiring {count} old sessions, committing to database...")
         self.db.commit()
+        print(f"[DEBUG] Session cleanup completed, {count} sessions expired")
         return count
+
+    async def manual_save_conversation(self, conversation_id: str) -> Conversation:
+        """Manually save/refresh a conversation to ensure persistence"""
+        print(f"[DEBUG] Manual save requested for conversation {conversation_id}")
+        
+        conversation = self.db.query(Conversation).filter(
+            Conversation.id == conversation_id
+        ).first()
+        
+        if not conversation:
+            raise ValueError(f"Conversation {conversation_id} not found")
+        
+        # Update the updated_at timestamp to indicate manual save
+        old_time = conversation.updated_at
+        conversation.updated_at = datetime.utcnow()
+        print(f"[DEBUG] Updated conversation timestamp from {old_time} to {conversation.updated_at}")
+        
+        # Commit the changes
+        print(f"[DEBUG] Committing manual save to database...")
+        self.db.commit()
+        self.db.refresh(conversation)
+        print(f"[DEBUG] Conversation manually saved successfully")
+        
+        return conversation

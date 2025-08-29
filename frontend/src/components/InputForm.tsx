@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { SquarePen, Brain, Send, StopCircle } from "lucide-react";
+import { SquarePen, Brain, Send, StopCircle, Save } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import FileUploader from "./UploadFile";
 import {
@@ -17,6 +17,8 @@ interface InputFormProps {
   onCancel: () => void;
   isLoading: boolean;
   hasHistory: boolean;
+  onSaveConversation?: (conversationId: string) => Promise<void>;
+  currentConversationId?: string;
 }
 
 export const InputForm: React.FC<InputFormProps> = ({
@@ -24,15 +26,39 @@ export const InputForm: React.FC<InputFormProps> = ({
   onCancel,
   isLoading,
   hasHistory,
+  onSaveConversation,
+  currentConversationId,
 }) => {
   const [internalInputValue, setInternalInputValue] = useState("");
   const [effort, setEffort] = useState("medium");
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Debug logging
+  console.log('[DEBUG] InputForm render:', {
+    hasHistory,
+    onSaveConversation: !!onSaveConversation,
+    currentConversationId,
+    shouldShowSaveButton: hasHistory && onSaveConversation && currentConversationId
+  });
 
   const handleInternalSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!internalInputValue.trim()) return;
     onSubmit(internalInputValue, effort);
     setInternalInputValue("");
+  };
+
+  const handleSaveConversation = async () => {
+    if (!onSaveConversation || !currentConversationId) return;
+
+    setIsSaving(true);
+    try {
+      await onSaveConversation(currentConversationId);
+    } catch (error) {
+      console.error("Failed to save conversation:", error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -126,16 +152,29 @@ export const InputForm: React.FC<InputFormProps> = ({
             </Select>
           </div>
         </div>
-        {hasHistory && (
-          <Button
-            className="bg-card border-border text-foreground cursor-pointer rounded-xl rounded-t-sm pl-2 hover:bg-muted"
-            variant="default"
-            onClick={() => window.location.reload()}
-          >
-            <SquarePen size={16} />
-            New Search
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {hasHistory && onSaveConversation && currentConversationId && (
+            <Button
+              className="bg-card border-border text-foreground cursor-pointer rounded-xl rounded-t-sm pl-2 hover:bg-muted"
+              variant="default"
+              onClick={handleSaveConversation}
+              disabled={isSaving}
+            >
+              <Save size={16} />
+              {isSaving ? "Saving..." : "Save"}
+            </Button>
+          )}
+          {hasHistory && (
+            <Button
+              className="bg-card border-border text-foreground cursor-pointer rounded-xl rounded-t-sm pl-2 hover:bg-muted"
+              variant="default"
+              onClick={() => window.location.reload()}
+            >
+              <SquarePen size={16} />
+              New Search
+            </Button>
+          )}
+        </div>
       </div>
       <FileUploader />
     </form>
