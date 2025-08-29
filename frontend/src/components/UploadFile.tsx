@@ -146,26 +146,6 @@ export default function FileUploader() {
         <span className="font-medium">Upload</span>
       </label>
 
-      {/* Supported file types information */}
-      <div className="text-xs text-gray-600 mt-2">
-        <p className="font-medium mb-1">Supported file types:</p>
-        <div className="flex flex-wrap gap-1">
-          <span className="px-2 py-1 bg-gray-100 rounded text-xs">PDF</span>
-          <span className="px-2 py-1 bg-gray-100 rounded text-xs">
-            Word (.docx, .doc)
-          </span>
-          <span className="px-2 py-1 bg-gray-100 rounded text-xs">
-            PowerPoint (.pptx, .ppt)
-          </span>
-          <span className="px-2 py-1 bg-gray-100 rounded text-xs">
-            Excel (.xlsx, .xls)
-          </span>
-          <span className="px-2 py-1 bg-gray-100 rounded text-xs">
-            Text (.txt, .md, .csv)
-          </span>
-        </div>
-      </div>
-
       {files.length > 0 && (
         <div className="mb-4 space-y-2">
           <h3 className="font-medium text-sm">Selected Files:</h3>
